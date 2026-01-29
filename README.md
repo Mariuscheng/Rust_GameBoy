@@ -1,4 +1,4 @@
-# Rust Game Boy 模擬器 (未完成)
+# Rust Game Boy 模擬器 (A.I Project)
 
 一個以 Rust 編寫、搭配 SDL3 前端的 Game Boy 模擬器專案。目標是能夠運行經典 ROM、顯示像素、接收輸入並輸出聲音，同時維持簡潔、可讀的程式碼。
 
