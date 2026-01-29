@@ -3,6 +3,7 @@ use sdl3::event::Event;
 use sdl3::keyboard::Scancode;
 use sdl3::pixels::PixelFormat;
 use sdl3::rect::Rect;
+use sdl3::render::ScaleMode;
 use sdl3::video::Window;
 use std::collections::HashSet;
 
@@ -14,6 +15,12 @@ pub struct SdlDisplay {
     pub event_pump: sdl3::EventPump,
     pub _scale: u32,
     recent_keydowns: HashSet<Scancode>,
+    // 預先分配的像素緩衝，避免每幀重複分配
+    pixel_buffer: Vec<u8>,
+    // 持久化 streaming texture（需要 crate feature: unsafe_textures）
+    texture: Option<sdl3::render::Texture>,
+    // 音量控制 (0.0 到 1.0)
+    pub volume: f32,
 }
 
 impl SdlDisplay {
@@ -30,7 +37,19 @@ impl SdlDisplay {
             .resizable()
             .build()
             .map_err(|e| format!("SDL build window error: {:?}", e))?;
-        let canvas = window.into_canvas();
+        let mut canvas = window.into_canvas();
+        // 設置黑色背景減少閃爍
+        let _ = canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
+
+        // 預先分配像素緩衝（160*144*4 = 92160 bytes）
+        let pixel_buffer = vec![0u8; 160 * 144 * 4];
+        // 建立持久化的 streaming texture，避免每幀建立/銷毀造成閃爍
+        let texture_creator = canvas.texture_creator();
+        let mut texture = texture_creator
+            .create_texture_streaming(PixelFormat::ARGB8888, 160, 144)
+            .map_err(|e| format!("SDL texture error: {:?}", e))?;
+        let _ = texture.set_scale_mode(ScaleMode::Nearest);
+
         let event_pump = sdl
             .event_pump()
             .map_err(|e| format!("SDL event pump error: {:?}", e))?;
@@ -41,10 +60,14 @@ impl SdlDisplay {
             event_pump,
             _scale: scale,
             recent_keydowns: HashSet::new(),
+            pixel_buffer,
+            texture: Some(texture),
+            volume: 0.5, // 預設音量 50%
         })
     }
 
-    /// 將 0..3 的灰階 framebuffer 轉成 ARGB8888 並更新 texture
+    /// 將 0..3 的灰階 framebuffer 轉成 ARGB8888 並更新顯示
+    /// 使用預先分配的像素緩衝，避免每幀都建立新 texture 導致的閃爍
     pub fn blit_framebuffer(&mut self, shades: &[u8]) -> Result<(), String> {
         if shades.len() != 160 * 144 {
             return Err("framebuffer size mismatch".into());
@@ -56,27 +79,37 @@ impl SdlDisplay {
             0xFF7F7F7F, // 深灰
             0xFF000000, // 黑
         ];
-        let texture_creator = self.canvas.texture_creator();
-        let mut texture = texture_creator
-            .create_texture_streaming(PixelFormat::ARGB8888, 160, 144)
-            .map_err(|e| format!("SDL texture error: {:?}", e))?;
-        texture
-            .with_lock(None, |buf: &mut [u8], pitch: usize| {
-                for y in 0..144usize {
-                    let row = &shades[y * 160..(y + 1) * 160];
-                    let dst = &mut buf[y * pitch..y * pitch + 160 * 4];
-                    for (x, &s) in row.iter().enumerate() {
-                        let px = palette[s as usize];
-                        let o = x * 4;
-                        dst[o + 0] = (px & 0xFF) as u8; // B
-                        dst[o + 1] = ((px >> 8) & 0xFF) as u8; // G
-                        dst[o + 2] = ((px >> 16) & 0xFF) as u8; // R
-                        dst[o + 3] = ((px >> 24) & 0xFF) as u8; // A
-                    }
-                }
-            })
-            .map_err(|e| format!("lock texture error: {:?}", e))?;
+
+        // 轉換灰階到 ARGB8888，保存到預先分配的緩衝
+        for (i, &shade) in shades.iter().enumerate() {
+            let px = palette[shade as usize];
+            let offset = i * 4;
+            self.pixel_buffer[offset + 0] = (px & 0xFF) as u8; // B
+            self.pixel_buffer[offset + 1] = ((px >> 8) & 0xFF) as u8; // G
+            self.pixel_buffer[offset + 2] = ((px >> 16) & 0xFF) as u8; // R
+            self.pixel_buffer[offset + 3] = ((px >> 24) & 0xFF) as u8; // A
+        }
+
+        // 使用持久化的 streaming texture 更新像素
+        let tex = self
+            .texture
+            .as_mut()
+            .ok_or_else(|| "texture not initialized".to_string())?;
+        tex.with_lock(None, |buf: &mut [u8], pitch: usize| {
+            for y in 0..144usize {
+                let src_row = &self.pixel_buffer[y * 160 * 4..(y + 1) * 160 * 4];
+                let dst_row = &mut buf[y * pitch..y * pitch + 160 * 4];
+                dst_row.copy_from_slice(src_row);
+            }
+        })
+        .map_err(|e| format!("lock texture error: {:?}", e))?;
+
+        // 先設置背景色
+        let _ = self
+            .canvas
+            .set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
         self.canvas.clear();
+
         // 整數縮放：依視窗大小計算最接近的整數倍數並置中，避免非整數縮放造成條紋
         let (ww, wh) = self._window.size();
         let sx = (ww / 160).max(1);
@@ -87,9 +120,11 @@ impl SdlDisplay {
         let dst_x = ((ww - dst_w) / 2) as i32;
         let dst_y = ((wh - dst_h) / 2) as i32;
         let dst = Rect::new(dst_x, dst_y, dst_w, dst_h);
+
         self.canvas
-            .copy(&texture, None, dst)
+            .copy(tex, None, dst)
             .map_err(|e| format!("copy texture error: {:?}", e))?;
+
         self.canvas.present();
         Ok(())
     }
@@ -120,6 +155,17 @@ impl SdlDisplay {
                     }
                     if let Some(sdl3::keyboard::Keycode::Escape) = keycode {
                         return true;
+                    }
+                    // 音量控制
+                    if let Some(sdl3::keyboard::Keycode::Equals) = keycode {
+                        // + 鍵增加音量
+                        self.volume = (self.volume + 0.1).min(1.0);
+                        println!("音量: {:.1}", self.volume);
+                    }
+                    if let Some(sdl3::keyboard::Keycode::Minus) = keycode {
+                        // - 鍵減少音量
+                        self.volume = (self.volume - 0.1).max(0.0);
+                        println!("音量: {:.1}", self.volume);
                     }
                 }
                 _ => {}

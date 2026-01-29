@@ -50,6 +50,7 @@ impl SimpleAPUSynth {
             _ => 0.75,
         }
     }
+
     #[inline]
     pub fn trigger(&mut self) {
         self.phase1 = 0.0;
@@ -64,10 +65,13 @@ struct EmuAudioCallback {
 
 impl AudioCallback<f32> for EmuAudioCallback {
     fn callback(&mut self, stream: &mut AudioStream, requested: i32) {
-        let mut out = Vec::<f32>::with_capacity(requested as usize);
         let mut guard = self.synth.lock().unwrap();
         let s = &mut *guard;
         let sr = self.sample_rate;
+
+        // Prepare samples directly into a buffer
+        let mut samples = Vec::with_capacity(requested as usize);
+
         for _ in 0..requested {
             let mut sample = 0.0f32;
             if s.master_enable && s.ch1_enable && s.ch1_freq_hz > 0.0 && s.ch1_volume > 0.0 {
@@ -96,9 +100,26 @@ impl AudioCallback<f32> for EmuAudioCallback {
             if sample < -1.0 {
                 sample = -1.0;
             }
-            out.push(sample);
+
+            // Debug: print non-zero samples occasionally
+            static mut DEBUG_COUNTER: u32 = 0;
+            unsafe {
+                DEBUG_COUNTER += 1;
+                if DEBUG_COUNTER % 500000 == 0 && sample.abs() > 0.001 {
+                    println!(
+                        "Audio active: ch1={}@{:.0}Hz, ch2={}@{:.0}Hz",
+                        s.ch1_enable, s.ch1_freq_hz, s.ch2_enable, s.ch2_freq_hz
+                    );
+                }
+            }
+
+            samples.push(sample);
         }
-        let _ = stream.put_data_f32(&out);
+
+        // Write samples to the audio stream
+        if let Err(e) = stream.put_data_f32(&samples) {
+            eprintln!("Audio stream error: {:?}", e);
+        }
     }
 }
 
@@ -131,6 +152,7 @@ impl AudioInterface {
             .map_err(|e| format!("Audio stream error: {:?}", e))?;
         Ok(Self { device })
     }
+
     pub fn new_from_sdl(
         sdl: &sdl3::Sdl,
         synth: Arc<Mutex<SimpleAPUSynth>>,
@@ -155,15 +177,43 @@ impl AudioInterface {
             .map_err(|e| format!("Audio stream error: {:?}", e))?;
         Ok(Self { device })
     }
+
     pub fn start(&self) -> Result<(), String> {
-        self.device
-            .resume()
-            .map_err(|e| format!("SDL resume error: {:?}", e))
+        println!("Starting audio device...");
+        match self.device.resume() {
+            Ok(_) => {
+                println!("Audio device started successfully");
+                Ok(())
+            }
+            Err(e) => {
+                let err_msg = format!("SDL resume error: {:?}", e);
+                eprintln!("{}", err_msg);
+                Err(err_msg)
+            }
+        }
     }
+
     pub fn stop(&self) -> Result<(), String> {
         self.device
             .pause()
             .map_err(|e| format!("SDL pause error: {:?}", e))
     }
-    pub fn play_test_tone(&self) {}
+
+    pub fn play_test_tone(&self, synth: &Arc<Mutex<SimpleAPUSynth>>) {
+        println!("Playing test tone...");
+        if let Ok(mut s) = synth.lock() {
+            s.master_enable = true;
+            s.ch1_enable = true;
+            s.ch1_freq_hz = 440.0; // A4 note
+            s.ch1_volume = 0.5;
+            s.ch1_duty = 2; // 50% duty cycle
+            s.trigger();
+        }
+        // Play for 2 seconds
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        if let Ok(mut s) = synth.lock() {
+            s.ch1_enable = false;
+        }
+        println!("Test tone finished");
+    }
 }
