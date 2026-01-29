@@ -229,8 +229,24 @@ impl CPU {
                 self.dbg_hit_rst38_once = true;
             }
         }
-        // Interrupts are checked between instructions
-        if let Some((bit, vec)) = if self.ime { self.pending_interrupt() } else { None } {
+
+        // Apply EI delayed enable at the START of each instruction
+        // If ime_enable_pending is true, enable IME NOW (at the start of this instruction execution)
+        // This ensures: EI executes in instr N, sets pending=true
+        //              Instr N+1 executes (no interrupt check here)
+        //              Instr N+2 starts: pending=true, so IME becomes true at START
+        //              Then we check for interrupts (which now may execute due to IME=true)
+        if self.ime_enable_pending {
+            self.ime = true;
+            self.ime_enable_pending = false;
+        }
+
+        // Interrupts are checked between instructions (AFTER applying any pending EI)
+        if let Some((bit, vec)) = if self.ime {
+            self.pending_interrupt()
+        } else {
+            None
+        } {
             // If halted, wake before servicing
             self.halted = false;
             let taken = self.service_interrupt(bit, vec);
@@ -282,22 +298,22 @@ impl CPU {
             if rem > 0 {
                 self.memory.step(rem);
             }
-            // Apply EI delayed enable at end of each instruction
-            if self.ime_enable_pending {
-                self.ime = true;
-                self.ime_enable_pending = false;
-            }
+
+            // Apply EI delayed enable at end of each instruction execution
+            // armed -> pending: set pending for the NEXT instruction to apply
             if self.ime_enable_armed {
-                // Move armed -> pending so it applies after the NEXT instruction
                 self.ime_enable_pending = true;
                 self.ime_enable_armed = false;
             }
+
             taken
         } else {
             // Unknown opcode: log once, then treat as NOP
             if !self.dbg_unknown_once {
-                let _pc_before =
-                    self.registers.get_pc().wrapping_sub(1 + if cb_prefix { 1 } else { 0 });
+                let _pc_before = self
+                    .registers
+                    .get_pc()
+                    .wrapping_sub(1 + if cb_prefix { 1 } else { 0 });
                 // println!(
                 //     "[CPU] Unknown opcode {:02X}{} at PC={:04X}",
                 //     opcode,
@@ -680,7 +696,10 @@ mod tests {
         let _ = cpu.execute_next();
         assert_eq!(cpu.ime, false, "IME should not enable immediately after EI");
         let _ = cpu.execute_next();
-        assert_eq!(cpu.ime, true, "IME should enable after the next instruction completes");
+        assert_eq!(
+            cpu.ime, true,
+            "IME should enable after the next instruction completes"
+        );
     }
 
     #[test]
@@ -694,7 +713,10 @@ mod tests {
         let _ = cpu.execute_next(); // EI (arms)
         assert_eq!(cpu.ime, false);
         let _ = cpu.execute_next(); // DI executes before EI takes effect
-        assert_eq!(cpu.ime, false, "DI should keep IME false despite pending EI");
+        assert_eq!(
+            cpu.ime, false,
+            "DI should keep IME false despite pending EI"
+        );
     }
 
     #[test]

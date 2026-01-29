@@ -1,6 +1,7 @@
 // -------- Flag/CPU control: DAA, CPL, SCF, CCF, EI, DI, STOP --------
 fn ei_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
     // EI enables IME after the NEXT instruction completes (delayed enable)
+    // Set armed flag; during instruction finalization, it becomes pending
     cpu.ime_enable_armed = true;
     4
 }
@@ -95,20 +96,62 @@ fn stop_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
     4
 }
 
-static EI: Instruction =
-    Instruction { opcode: 0xFB, name: "EI", cycles: 4, size: 1, flags: &[], execute: ei_exec };
-static DI: Instruction =
-    Instruction { opcode: 0xF3, name: "DI", cycles: 4, size: 1, flags: &[], execute: di_exec };
-static CCF: Instruction =
-    Instruction { opcode: 0x3F, name: "CCF", cycles: 4, size: 1, flags: &[], execute: ccf_exec };
-static SCF: Instruction =
-    Instruction { opcode: 0x37, name: "SCF", cycles: 4, size: 1, flags: &[], execute: scf_exec };
-static CPL: Instruction =
-    Instruction { opcode: 0x2F, name: "CPL", cycles: 4, size: 1, flags: &[], execute: cpl_exec };
-static DAAI: Instruction =
-    Instruction { opcode: 0x27, name: "DAA", cycles: 4, size: 1, flags: &[], execute: daa_exec };
-static STOP: Instruction =
-    Instruction { opcode: 0x10, name: "STOP", cycles: 4, size: 2, flags: &[], execute: stop_exec };
+static EI: Instruction = Instruction {
+    opcode: 0xFB,
+    name: "EI",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: ei_exec,
+};
+static DI: Instruction = Instruction {
+    opcode: 0xF3,
+    name: "DI",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: di_exec,
+};
+static CCF: Instruction = Instruction {
+    opcode: 0x3F,
+    name: "CCF",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: ccf_exec,
+};
+static SCF: Instruction = Instruction {
+    opcode: 0x37,
+    name: "SCF",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: scf_exec,
+};
+static CPL: Instruction = Instruction {
+    opcode: 0x2F,
+    name: "CPL",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: cpl_exec,
+};
+static DAAI: Instruction = Instruction {
+    opcode: 0x27,
+    name: "DAA",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: daa_exec,
+};
+static STOP: Instruction = Instruction {
+    opcode: 0x10,
+    name: "STOP",
+    cycles: 4,
+    size: 2,
+    flags: &[],
+    execute: stop_exec,
+};
 // 指令結構
 #[allow(dead_code)]
 pub struct Instruction {
@@ -272,7 +315,8 @@ fn or_a_n_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
     cpu.registers.set_a(res);
     // Z set if zero, N H C cleared
     use crate::GB::registers::Flags;
-    cpu.registers.set_flags(if res == 0 { Flags::Z } else { Flags::empty() });
+    cpu.registers
+        .set_flags(if res == 0 { Flags::Z } else { Flags::empty() });
     8
 }
 
@@ -323,7 +367,11 @@ fn rrca_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
 fn rla_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
     use crate::GB::registers::Flags;
     let a = cpu.registers.get_a();
-    let old_c = if cpu.registers.flags().contains(Flags::C) { 1 } else { 0 };
+    let old_c = if cpu.registers.flags().contains(Flags::C) {
+        1
+    } else {
+        0
+    };
     let new_c = (a >> 7) & 1;
     let res = (a << 1) | old_c;
     cpu.registers.set_a(res);
@@ -338,7 +386,11 @@ fn rla_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
 fn rra_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
     use crate::GB::registers::Flags;
     let a = cpu.registers.get_a();
-    let old_c = if cpu.registers.flags().contains(Flags::C) { 1 } else { 0 };
+    let old_c = if cpu.registers.flags().contains(Flags::C) {
+        1
+    } else {
+        0
+    };
     let new_c = a & 1;
     let res = (a >> 1) | (old_c << 7);
     cpu.registers.set_a(res);
@@ -358,8 +410,14 @@ fn jp_nn_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
 }
 
 // 靜態指令定義
-static NOP: Instruction =
-    Instruction { opcode: 0x00, name: "NOP", cycles: 4, size: 1, flags: &[], execute: nop_exec };
+static NOP: Instruction = Instruction {
+    opcode: 0x00,
+    name: "NOP",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: nop_exec,
+};
 
 static LD_A_N: Instruction = Instruction {
     opcode: 0x3E,
@@ -397,8 +455,14 @@ static DEC_A: Instruction = Instruction {
     execute: dec_a_exec,
 };
 
-static HALT: Instruction =
-    Instruction { opcode: 0x76, name: "HALT", cycles: 4, size: 1, flags: &[], execute: halt_exec };
+static HALT: Instruction = Instruction {
+    opcode: 0x76,
+    name: "HALT",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: halt_exec,
+};
 
 static JP_NN: Instruction = Instruction {
     opcode: 0xC3,
@@ -418,20 +482,50 @@ static OR_A_N: Instruction = Instruction {
     execute: or_a_n_exec,
 };
 
-static RET: Instruction =
-    Instruction { opcode: 0xC9, name: "RET", cycles: 16, size: 1, flags: &[], execute: ret_exec };
+static RET: Instruction = Instruction {
+    opcode: 0xC9,
+    name: "RET",
+    cycles: 16,
+    size: 1,
+    flags: &[],
+    execute: ret_exec,
+};
 
-static RLCA: Instruction =
-    Instruction { opcode: 0x07, name: "RLCA", cycles: 4, size: 1, flags: &[], execute: rlca_exec };
+static RLCA: Instruction = Instruction {
+    opcode: 0x07,
+    name: "RLCA",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: rlca_exec,
+};
 
-static RRCA: Instruction =
-    Instruction { opcode: 0x0F, name: "RRCA", cycles: 4, size: 1, flags: &[], execute: rrca_exec };
+static RRCA: Instruction = Instruction {
+    opcode: 0x0F,
+    name: "RRCA",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: rrca_exec,
+};
 
-static RLA: Instruction =
-    Instruction { opcode: 0x17, name: "RLA", cycles: 4, size: 1, flags: &[], execute: rla_exec };
+static RLA: Instruction = Instruction {
+    opcode: 0x17,
+    name: "RLA",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: rla_exec,
+};
 
-static RRA: Instruction =
-    Instruction { opcode: 0x1F, name: "RRA", cycles: 4, size: 1, flags: &[], execute: rra_exec };
+static RRA: Instruction = Instruction {
+    opcode: 0x1F,
+    name: "RRA",
+    cycles: 4,
+    size: 1,
+    flags: &[],
+    execute: rra_exec,
+};
 
 // Generic definitions
 pub static GENERIC_LD_R_R: Instruction = Instruction {
@@ -592,10 +686,22 @@ static JP_HL: Instruction = Instruction {
     flags: &[],
     execute: jp_hl_exec,
 };
-static RST_T: Instruction =
-    Instruction { opcode: 0xC7, name: "RST t", cycles: 16, size: 1, flags: &[], execute: rst_exec };
-static RETI: Instruction =
-    Instruction { opcode: 0xD9, name: "RETI", cycles: 16, size: 1, flags: &[], execute: reti_exec };
+static RST_T: Instruction = Instruction {
+    opcode: 0xC7,
+    name: "RST t",
+    cycles: 16,
+    size: 1,
+    flags: &[],
+    execute: rst_exec,
+};
+static RETI: Instruction = Instruction {
+    opcode: 0xD9,
+    name: "RETI",
+    cycles: 16,
+    size: 1,
+    flags: &[],
+    execute: reti_exec,
+};
 
 // Unconditional CALL nn
 fn call_nn_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
@@ -722,7 +828,10 @@ fn alu_adc_a_r_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 
     let src = cpu.opcode & 0x07;
     let a = cpu.registers.get_a();
     let b = read_r_timed(cpu, src);
-    let carry = cpu.registers.flags().contains(crate::GB::registers::Flags::C);
+    let carry = cpu
+        .registers
+        .flags()
+        .contains(crate::GB::registers::Flags::C);
     let cval = if carry { 1 } else { 0 };
     let res = a.wrapping_add(b).wrapping_add(cval);
     let z = res == 0;
@@ -752,7 +861,10 @@ fn alu_sbc_a_r_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 
     let src = cpu.opcode & 0x07;
     let a = cpu.registers.get_a();
     let b = read_r_timed(cpu, src);
-    let carry = cpu.registers.flags().contains(crate::GB::registers::Flags::C);
+    let carry = cpu
+        .registers
+        .flags()
+        .contains(crate::GB::registers::Flags::C);
     let cval = if carry { 1 } else { 0 };
     let res = a.wrapping_sub(b).wrapping_sub(cval);
     let z = res == 0;
@@ -884,7 +996,10 @@ fn alu_add_a_n_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 
 fn alu_adc_a_n_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
     let a = cpu.registers.get_a();
     let n = cpu.read_u8_imm();
-    let carry = cpu.registers.flags().contains(crate::GB::registers::Flags::C);
+    let carry = cpu
+        .registers
+        .flags()
+        .contains(crate::GB::registers::Flags::C);
     let cval = if carry { 1 } else { 0 };
     let res = a.wrapping_add(n).wrapping_add(cval);
     let z = res == 0;
@@ -912,7 +1027,10 @@ fn alu_sub_a_n_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 
 fn alu_sbc_a_n_exec(_instr: &Instruction, cpu: &mut crate::GB::CPU::CPU) -> u64 {
     let a = cpu.registers.get_a();
     let n = cpu.read_u8_imm();
-    let carry = cpu.registers.flags().contains(crate::GB::registers::Flags::C);
+    let carry = cpu
+        .registers
+        .flags()
+        .contains(crate::GB::registers::Flags::C);
     let cval = if carry { 1 } else { 0 };
     let res = a.wrapping_sub(n).wrapping_sub(cval);
     let z = res == 0;
