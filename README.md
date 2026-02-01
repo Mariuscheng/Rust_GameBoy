@@ -73,6 +73,7 @@
 
 ## 運行
 
+- 先安裝SDL3
 - 先建立roms資料夾, 再執行以下指令
 
 ```bash
@@ -95,4 +96,5 @@ cargo run --release -- roms/<rom name>.gb
 - 通過更多測試 ROM
 
 - 支援更多 MBC 類型
+
 
