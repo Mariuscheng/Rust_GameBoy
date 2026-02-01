@@ -21,13 +21,11 @@ pub struct Apu {
 
     // 音訊緩衝區
     pub audio_buffer: VecDeque<f32>,
-    sample_clock: u32,
-
-    // 下採樣累加器
-    left_sample_sum: f32,
-    right_sample_sum: f32,
-    sample_count: u32,
+    sample_clock: f32,
 }
+
+// CPU 頻率 / 採樣率 = 4194304 / 44100 ≈ 95.1
+const SAMPLE_RATE_DIVISOR: f32 = 4194304.0 / 44100.0;
 
 impl Apu {
     pub fn new() -> Self {
@@ -40,11 +38,8 @@ impl Apu {
             nr51: 0,
             nr52: 0,
             frame_sequencer: FrameSequencer::new(),
-            audio_buffer: VecDeque::with_capacity(4096),
-            sample_clock: 0,
-            left_sample_sum: 0.0,
-            right_sample_sum: 0.0,
-            sample_count: 0,
+            audio_buffer: VecDeque::with_capacity(8192),
+            sample_clock: 0.0,
         }
     }
 
@@ -229,8 +224,14 @@ impl Apu {
         self.wave.tick();
         self.noise.tick();
 
-        // 採樣（高品質下採樣）
-        self.accumulate_sample();
+        // 採樣（降低採樣頻率以提高效能）
+        self.sample_clock += 1.0;
+        // CPU 頻率 4194304Hz，採樣率 44100Hz
+        // 使用精確的浮點數計算避免漂移
+        if self.sample_clock >= SAMPLE_RATE_DIVISOR {
+            self.sample_clock -= SAMPLE_RATE_DIVISOR;
+            self.output_sample();
+        }
     }
 
     fn clock_length(&mut self) {
@@ -246,34 +247,16 @@ impl Apu {
         self.noise.clock_envelope();
     }
 
-    fn accumulate_sample(&mut self) {
-        // 生成當前樣本
-        let (left, right) = self.mix_channels();
-        self.left_sample_sum += left;
-        self.right_sample_sum += right;
-        self.sample_count += 1;
-
-        // CPU 頻率 4194304Hz，採樣率 44100Hz
-        // 每 95.1 個 T-cycles 產生一個樣本
-        self.sample_clock += 1;
-        if self.sample_clock >= 95 {
-            self.sample_clock = 0;
-
-            if self.sample_count > 0 {
-                let left_avg = self.left_sample_sum / self.sample_count as f32;
-                let right_avg = self.right_sample_sum / self.sample_count as f32;
-
-                // 輸出交錯的立體聲樣本
-                if self.audio_buffer.len() < 8192 {
-                    self.audio_buffer.push_back(left_avg);
-                    self.audio_buffer.push_back(right_avg);
-                }
-
-                self.left_sample_sum = 0.0;
-                self.right_sample_sum = 0.0;
-                self.sample_count = 0;
-            }
+    fn output_sample(&mut self) {
+        // 只在需要輸出樣本時才做混音計算
+        if self.audio_buffer.len() >= 8192 {
+            return; // 緩衝區滿了，跳過
         }
+
+        let (left, right) = self.mix_channels();
+        // 混合左右聲道為單聲道（與 SDL 設定匹配）
+        let mono = (left + right) * 0.5;
+        self.audio_buffer.push_back(mono);
     }
 
     fn mix_channels(&self) -> (f32, f32) {
@@ -795,30 +778,10 @@ impl WaveChannel {
 
     fn trigger(&mut self, frame_step: u8) {
         // DMG Wave 通道 corruption bug:
-        // 當 Wave 通道正在播放時被重新觸發，Wave RAM 會損壞
-        if self.enabled && self.dac_enabled {
-            // 取得當前正在讀取的 wave RAM 位置（以字節為單位，0-15）
-            let byte_pos = (self.position / 2) as usize;
-            
-            if byte_pos < 4 {
-                // position 0-7 (字節 0-3): 第一個字節被複製到位置 0
-                // 實際上是當前讀取的字節被複製到位置 0
-                let corrupted_byte = self.wave_ram[byte_pos];
-                self.wave_ram[0] = corrupted_byte;
-            } else {
-                // position 8-31 (字節 4-15): 從 (byte_pos & ~3) 開始的 4 字節被複製到位置 0-3
-                // 也就是說，取 byte_pos 對齊到 4 的邊界
-                let src_start = byte_pos & !3;
-                let b0 = self.wave_ram[src_start];
-                let b1 = self.wave_ram[src_start + 1];
-                let b2 = self.wave_ram[src_start + 2];
-                let b3 = self.wave_ram[src_start + 3];
-                self.wave_ram[0] = b0;
-                self.wave_ram[1] = b1;
-                self.wave_ram[2] = b2;
-                self.wave_ram[3] = b3;
-            }
-        }
+        // 當 Wave 通道正在播放時被重新觸發，Wave RAM 可能會損壞
+        // 這個 bug 需要非常精確的 T-cycle 級別時序才能正確實現
+        // 許多模擬器選擇不實現這個 bug，因為它很少影響實際遊戲
+        // 只有 Duck Tales 等少數遊戲會觸發這個問題
 
         // 波形通道觸發時重新啟用
         self.enabled = self.dac_enabled;

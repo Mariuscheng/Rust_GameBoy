@@ -34,7 +34,7 @@ pub fn main(rom_path: String) {
     let video_subsystem = sdl_context.video().unwrap();
     let audio_subsystem = sdl_context.audio().unwrap();
 
-    let (tx, rx) = crossbeam::channel::bounded(8192);
+    let (tx, rx) = crossbeam::channel::bounded(16384);
 
     let spec = AudioSpec {
         format: Some(AudioFormat::f32_sys()),
