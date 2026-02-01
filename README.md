@@ -4,7 +4,7 @@
 
 ## ⚠️ 目前狀態
 
-- ✅ **Hyper_Lode_Runner.gb** - 已測試，可正常遊玩
+- ✅ **Hyper_Lode_Runner.gb** - 已測試，可正常遊玩 (正版, backup自用)
 - ⚠️ 其他遊戲可能有問題，日後會持續優化
 
 ## 功能
@@ -47,4 +47,5 @@ cargo run --release -- roms/Hyper_Lode_Runner.gb
 - 修復其他遊戲的相容性問題
 - 改善 Joypad 輸入處理
 - 通過更多測試 ROM
+
 - 支援更多 MBC 類型
