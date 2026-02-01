@@ -9,7 +9,7 @@ use sdl3::rect::Rect;
 
 use crossbeam::channel::Receiver;
 use sdl3::audio::{AudioCallback, AudioFormat, AudioSpec, AudioStream};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 struct GbAudio {
     receiver: Receiver<f32>,
@@ -73,9 +73,12 @@ pub fn main(rom_path: String) {
     gb.load_rom(&rom_path).expect("Failed to load ROM");
 
     let mut event_pump = sdl_context.event_pump().unwrap();
-    let mut i = 0;
+
+    // Game Boy 精確幀率: 59.7275 FPS (~16.74ms per frame)
+    let frame_duration = Duration::from_nanos(16_742_706);
+
     'running: loop {
-        i = (i + 1) % 255;
+        let frame_start = Instant::now();
 
         for event in event_pump.poll_iter() {
             match event {
@@ -87,20 +90,12 @@ pub fn main(rom_path: String) {
                     gb.mmu.save_external_ram();
                     break 'running;
                 }
-
-                Event::KeyDown {
-                    keycode: Some(key), ..
-                } => {
-                    update_joypad(&mut gb, key, true);
-                }
-                Event::KeyUp {
-                    keycode: Some(key), ..
-                } => {
-                    update_joypad(&mut gb, key, false);
-                }
                 _ => {}
             }
         }
+
+        // 使用鍵盤狀態快照而非事件，確保遊戲能讀取到按下的按鍵
+        update_joypad_from_keyboard(&mut gb, &event_pump);
 
         // --- advance emulator one frame and get PPU framebuffer (indexed 0..=3) ---
         gb.run_frame();
@@ -149,7 +144,11 @@ pub fn main(rom_path: String) {
         canvas.copy(&stream_tex, None, dest).unwrap();
         canvas.present();
 
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        // 精確計時：只 sleep 剩餘時間
+        let elapsed = frame_start.elapsed();
+        if elapsed < frame_duration {
+            std::thread::sleep(frame_duration - elapsed);
+        }
     }
 }
 
@@ -164,13 +163,50 @@ fn update_joypad(gb: &mut GameBoy, key: Keycode, pressed: bool) {
         Keycode::Z => Some(JoypadKey::A),
         Keycode::X => Some(JoypadKey::B),
         Keycode::Return => Some(JoypadKey::Start),
-        Keycode::Backspace => Some(JoypadKey::Select),
+        Keycode::RShift => Some(JoypadKey::Select),
+        Keycode::Space => Some(JoypadKey::Start),
         _ => None,
     };
 
     if let Some(b) = button {
-        if gb.joypad.set_key(b, pressed) {
-            gb.mmu.if_reg |= 0x10; // 觸發 Joypad 中斷
+        gb.joypad.set_key(b, pressed);
+        if pressed {
+            gb.mmu.if_reg |= 0x10;
         }
+    }
+}
+
+fn update_joypad_from_keyboard(gb: &mut GameBoy, event_pump: &sdl3::EventPump) {
+    use crate::joypad::JoypadKey;
+    use sdl3::keyboard::Scancode;
+
+    let keyboard_state = event_pump.keyboard_state();
+
+    // 方向鍵
+    let up = keyboard_state.is_scancode_pressed(Scancode::Up);
+    let down = keyboard_state.is_scancode_pressed(Scancode::Down);
+    let left = keyboard_state.is_scancode_pressed(Scancode::Left);
+    let right = keyboard_state.is_scancode_pressed(Scancode::Right);
+
+    // 功能鍵
+    let a = keyboard_state.is_scancode_pressed(Scancode::Z);
+    let b = keyboard_state.is_scancode_pressed(Scancode::X);
+    let start = keyboard_state.is_scancode_pressed(Scancode::Return)
+        || keyboard_state.is_scancode_pressed(Scancode::Space);
+    let select = keyboard_state.is_scancode_pressed(Scancode::RShift);
+
+    // 更新 joypad 狀態
+    gb.joypad.set_key(JoypadKey::Up, up);
+    gb.joypad.set_key(JoypadKey::Down, down);
+    gb.joypad.set_key(JoypadKey::Left, left);
+    gb.joypad.set_key(JoypadKey::Right, right);
+    gb.joypad.set_key(JoypadKey::A, a);
+    gb.joypad.set_key(JoypadKey::B, b);
+    gb.joypad.set_key(JoypadKey::Start, start);
+    gb.joypad.set_key(JoypadKey::Select, select);
+
+    // 如果有任何按鍵被按下，觸發 joypad 中斷
+    if up || down || left || right || a || b || start || select {
+        gb.mmu.if_reg |= 0x10;
     }
 }
