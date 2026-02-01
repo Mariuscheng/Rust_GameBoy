@@ -71,13 +71,48 @@
 | Select | Right Shift |
 | 退出 | Escape |
 
+## 環境需求
+
+### Windows
+
+1. **安裝 Rust**
+   ```bash
+   # 從 https://rustup.rs/ 下載並安裝
+   rustup default stable
+   ```
+
+2. **安裝 vcpkg** (用於管理 SDL3)
+   ```bash
+   git clone https://github.com/microsoft/vcpkg.git
+   cd vcpkg
+   .\bootstrap-vcpkg.bat
+   ```
+
+3. **安裝 SDL3**
+   ```bash
+   .\vcpkg install sdl3:x64-windows
+   ```
+
+4. **設置環境變數**
+   ```bash
+   # 設定 VCPKG_ROOT 環境變數指向 vcpkg 安裝目錄
+   set VCPKG_ROOT=C:\path\to\vcpkg
+   ```
+
+### 替代方案：手動放置 DLL
+
+如果不想使用 vcpkg，可以：
+1. 從 [SDL3 Releases](https://github.com/libsdl-org/SDL/releases) 下載預編譯的 SDL3
+2. 將 `SDL3.dll` 放到專案根目錄的 `SDL3/` 資料夾
+3. 將 `SDL3.lib` 放到同一資料夾
+4. 執行時確保 `SDL3.dll` 在執行檔同目錄或系統 PATH 中
+
 ## 運行
 
-- 先安裝SDL3
-- 先建立roms資料夾, 再執行以下指令
+1. 先建立roms資料夾，並放入 Game Boy ROM 檔案
 
 ```bash
-cargo run --release -- roms/<rom name>.gb
+cargo run --release -- roms/<your_game>.gb
 ```
 
 ## 文件結構
@@ -94,7 +129,4 @@ cargo run --release -- roms/<rom name>.gb
 - 修復其他遊戲的相容性問題
 - 改善 Joypad 輸入處理
 - 通過更多測試 ROM
-
 - 支援更多 MBC 類型
-
-
