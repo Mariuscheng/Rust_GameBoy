@@ -1,4 +1,4 @@
-# Game Boy 模擬器 - GPU 加速 PPU
+# Game Boy 模擬器 - GPU 加速 PPU (A.I Project)
 
 這個專案展示如何將 Game Boy 的 PPU (Picture Processing Unit) 從 CPU 移到 GPU，使用 compute shader 進行完全 GPU 化的圖形渲染。
 
@@ -79,4 +79,5 @@ GPU 加速的 PPU 可以：
 - 添加 shader 熱重載
 - 支持多個後端 (Vulkan, DirectX, Metal)
 - 添加後處理效果 (掃描線模擬、像素化等)
+
 - 支持更高分辨率的渲染
