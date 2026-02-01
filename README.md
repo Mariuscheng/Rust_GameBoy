@@ -5,6 +5,7 @@
 ## ⚠️ 目前狀態
 
 - ✅ **Hyper_Lode_Runner.gb** - 已測試，可正常遊玩
+- ⚠️ Tetris 和 Dr.Mario 有問題 
 - ⚠️ 其他遊戲可能有問題，日後會持續優化
 
 ## 測試結果
@@ -129,4 +130,5 @@ cargo run --release -- roms/<your_game>.gb
 - 修復其他遊戲的相容性問題
 - 改善 Joypad 輸入處理
 - 通過更多測試 ROM
+
 - 支援更多 MBC 類型
