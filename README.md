@@ -4,9 +4,12 @@
 
 ## ⚠️ 目前狀態
 
-- ✅ **Hyper Lode Runner** - 已測試，可正常遊玩
-- ⚠️ Tetris 和 Dr.Mario 有問題，其他遊戲可能有問題，日後會持續優化
-- ⚠️ 聲音要優化, 有雜音
+| 測試 | 結果 |
+| Wario Land 3 | ✅ |
+| Hyper Lode Runner | ✅ |
+| Gremlins 2 | ✅ |
+| Dr.Mario | ❌ |
+| Tetris | ❌ |
 
 ## 測試結果
 
@@ -137,6 +140,7 @@ cargo run --release -- <your_game>.gb
 - 通過更多測試 ROM
 
 - 支援更多 MBC 類型
+
 
 
 
