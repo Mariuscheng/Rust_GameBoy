@@ -11,6 +11,7 @@
 | Gremlins 2 | ✅ |
 | Dr.Mario | ❌ |
 | Tetris | ❌ |
+| 方塊類遊戲 | ❌ |
 
 ## 測試結果
 
@@ -141,6 +142,7 @@ cargo run --release -- <your_game>.gb
 - 通過更多測試 ROM
 
 - 支援更多 MBC 類型
+
 
 
 
