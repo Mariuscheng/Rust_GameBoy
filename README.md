@@ -115,6 +115,11 @@
 ```bash
 cargo run --release -- roms/<your_game>.gb
 ```
+2. 或不想建立資料夾，直接放在專案根目錄也可以：
+
+```bash
+cargo run --release -- <your_game>.gb
+```
 
 ## 文件結構
 
@@ -132,5 +137,6 @@ cargo run --release -- roms/<your_game>.gb
 - 通過更多測試 ROM
 
 - 支援更多 MBC 類型
+
 
 
