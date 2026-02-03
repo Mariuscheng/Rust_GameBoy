@@ -2,7 +2,6 @@ extern crate sdl3;
 
 use crate::gameboy::GameBoy;
 use sdl3::event::Event;
-use sdl3::gpu::{Device, ShaderFormat};
 use sdl3::keyboard::Keycode;
 use sdl3::pixels::PixelFormat;
 use sdl3::rect::Rect;
@@ -34,6 +33,9 @@ pub fn main(rom_path: String) {
     let video_subsystem = sdl_context.video().unwrap();
     let audio_subsystem = sdl_context.audio().unwrap();
 
+    // 設置 SDL3 提示以強制啟用 VSync，解決畫面撕裂
+    sdl3::hint::set("SDL_RENDER_VSYNC", "1");
+
     let (tx, rx) = crossbeam::channel::bounded(16384);
 
     let spec = AudioSpec {
@@ -47,26 +49,23 @@ pub fn main(rom_path: String) {
         .unwrap();
     stream.resume().unwrap();
 
-    let gpu_subsystem = Device::new(ShaderFormat::SPIRV, false).unwrap();
-
     let window = video_subsystem
         .window("GameBoy", 800, 600)
         .position_centered()
+        .resizable()
         .build()
         .unwrap();
 
-    // attach GPU subsystem to the window (still useful if you later use shaders)
-    gpu_subsystem.with_window(&window).unwrap();
-
-    // capture window size BEFORE consuming the window into a canvas
-    let (win_w, win_h) = window.size();
-
-    // CPU-side streaming texture (simple, reliable): update every frame from PPU RGBA buffer
     let mut canvas = window.into_canvas();
     let texture_creator = canvas.texture_creator();
     let mut stream_tex = texture_creator
         .create_texture_streaming(PixelFormat::ABGR8888, 160, 144)
         .unwrap();
+
+    // 預先分配 RGBA 緩衝區，避免每幀重複分配
+    const W: u32 = 160;
+    const H: u32 = 144;
+    let mut rgba = vec![0u8; (W * H * 4) as usize];
 
     // emulator instance
     let mut gb = GameBoy::new();
@@ -74,7 +73,7 @@ pub fn main(rom_path: String) {
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    // Game Boy 精確幀率: 59.7275 FPS (~16.74ms per frame)
+    // Game Boy 精確幀率: 59.7275 FPS
     let frame_duration = Duration::from_nanos(16_742_706);
 
     'running: loop {
@@ -90,61 +89,67 @@ pub fn main(rom_path: String) {
                     gb.mmu.save_external_ram();
                     break 'running;
                 }
+                Event::KeyDown {
+                    scancode: Some(sc), ..
+                } => {
+                    if let Some(key) = map_scancode(sc) {
+                        if gb.joypad.set_key(key, true) {
+                            gb.mmu.if_reg |= 0x10;
+                        }
+                    }
+                }
+                Event::KeyUp {
+                    scancode: Some(sc), ..
+                } => {
+                    if let Some(key) = map_scancode(sc) {
+                        gb.joypad.set_key(key, false);
+                    }
+                }
                 _ => {}
             }
         }
 
-        // 使用鍵盤狀態快照而非事件，確保遊戲能讀取到按下的按鍵
-        update_joypad_from_keyboard(&mut gb, &event_pump);
-
-        // --- advance emulator one frame and get PPU framebuffer (indexed 0..=3) ---
         gb.run_frame();
 
-        // 獲取音訊樣本並發送到通道
+        // 獲取音訊樣本
         let samples = gb.apu.drain_samples();
         for s in samples {
-            // 如果通道滿了就丟棄，避免阻塞主執行緒
             let _ = tx.try_send(s);
         }
-        let ppu_fb = gb.get_framebuffer(); // &[u8] length 160*144
+
+        let ppu_fb = gb.get_framebuffer();
 
         // --- expand indexed (0..3) GB pixels to RGBA8888 ---
-        // Game Boy classic 4-shade grayscale (0 = white, 3 = black)
-        // dmg-acid2 requires: $FF, $AA, $55, $00
-        const W: usize = 160;
-        const H: usize = 144;
-        let mut rgba = vec![0u8; W * H * 4];
+        const PALETTE: [[u8; 4]; 4] = [
+            [255, 255, 255, 255], // White
+            [170, 170, 170, 255], // Light gray
+            [85, 85, 85, 255],    // Dark gray
+            [0, 0, 0, 255],       // Black
+        ];
+
         for (i, &idx) in ppu_fb.iter().enumerate() {
-            let shade = match idx {
-                0 => 0xFFu8, // White
-                1 => 0xAAu8, // Light gray
-                2 => 0x55u8, // Dark gray
-                _ => 0x00u8, // Black
-            };
+            let color = PALETTE[(idx & 0x03) as usize];
             let dst = i * 4;
-            rgba[dst] = shade;
-            rgba[dst + 1] = shade;
-            rgba[dst + 2] = shade;
-            rgba[dst + 3] = 0xFF;
+            rgba[dst..dst + 4].copy_from_slice(&color);
         }
 
         // --- upload to streaming texture and draw ---
         stream_tex.update(None, &rgba, (W * 4) as usize).unwrap();
 
-        // compute destination rect (scale integer factor, center)
-        let scale_x = win_w as f32 / W as f32;
-        let scale_y = win_h as f32 / H as f32;
-        let scale = scale_x.min(scale_y).floor().max(1.0) as u32;
-        let dest_w = (W as u32 * scale) as u32;
-        let dest_h = (H as u32 * scale) as u32;
-        let dst_x = ((win_w as i32 - dest_w as i32) / 2).max(0);
-        let dst_y = ((win_h as i32 - dest_h as i32) / 2).max(0);
-        let dest = Rect::new(dst_x, dst_y, dest_w, dest_h);
+        let (win_w, win_h) = canvas.window().size();
+        let scale = (win_w as f32 / W as f32)
+            .min(win_h as f32 / H as f32)
+            .floor()
+            .max(1.0);
+        let dest_w = (W as f32 * scale) as u32;
+        let dest_h = (H as f32 * scale) as u32;
+        let dst_x = (win_w - dest_w) / 2;
+        let dst_y = (win_h - dest_h) / 2;
+        let dest = Rect::new(dst_x as i32, dst_y as i32, dest_w, dest_h);
 
         canvas.copy(&stream_tex, None, dest).unwrap();
         canvas.present();
 
-        // 精確計時：只 sleep 剩餘時間
         let elapsed = frame_start.elapsed();
         if elapsed < frame_duration {
             std::thread::sleep(frame_duration - elapsed);
@@ -152,61 +157,19 @@ pub fn main(rom_path: String) {
     }
 }
 
-fn update_joypad(gb: &mut GameBoy, key: Keycode, pressed: bool) {
-    use crate::joypad::JoypadKey;
-
-    let button = match key {
-        Keycode::Up => Some(JoypadKey::Up),
-        Keycode::Down => Some(JoypadKey::Down),
-        Keycode::Left => Some(JoypadKey::Left),
-        Keycode::Right => Some(JoypadKey::Right),
-        Keycode::Z => Some(JoypadKey::A),
-        Keycode::X => Some(JoypadKey::B),
-        Keycode::Return => Some(JoypadKey::Start),
-        Keycode::RShift => Some(JoypadKey::Select),
-        Keycode::Space => Some(JoypadKey::Start),
-        _ => None,
-    };
-
-    if let Some(b) = button {
-        gb.joypad.set_key(b, pressed);
-        if pressed {
-            gb.mmu.if_reg |= 0x10;
-        }
-    }
-}
-
-fn update_joypad_from_keyboard(gb: &mut GameBoy, event_pump: &sdl3::EventPump) {
+fn map_scancode(scancode: sdl3::keyboard::Scancode) -> Option<crate::joypad::JoypadKey> {
     use crate::joypad::JoypadKey;
     use sdl3::keyboard::Scancode;
 
-    let keyboard_state = event_pump.keyboard_state();
-
-    // 方向鍵
-    let up = keyboard_state.is_scancode_pressed(Scancode::Up);
-    let down = keyboard_state.is_scancode_pressed(Scancode::Down);
-    let left = keyboard_state.is_scancode_pressed(Scancode::Left);
-    let right = keyboard_state.is_scancode_pressed(Scancode::Right);
-
-    // 功能鍵
-    let a = keyboard_state.is_scancode_pressed(Scancode::Z);
-    let b = keyboard_state.is_scancode_pressed(Scancode::X);
-    let start = keyboard_state.is_scancode_pressed(Scancode::Return)
-        || keyboard_state.is_scancode_pressed(Scancode::Space);
-    let select = keyboard_state.is_scancode_pressed(Scancode::RShift);
-
-    // 更新 joypad 狀態
-    gb.joypad.set_key(JoypadKey::Up, up);
-    gb.joypad.set_key(JoypadKey::Down, down);
-    gb.joypad.set_key(JoypadKey::Left, left);
-    gb.joypad.set_key(JoypadKey::Right, right);
-    gb.joypad.set_key(JoypadKey::A, a);
-    gb.joypad.set_key(JoypadKey::B, b);
-    gb.joypad.set_key(JoypadKey::Start, start);
-    gb.joypad.set_key(JoypadKey::Select, select);
-
-    // 如果有任何按鍵被按下，觸發 joypad 中斷
-    if up || down || left || right || a || b || start || select {
-        gb.mmu.if_reg |= 0x10;
+    match scancode {
+        Scancode::Up => Some(JoypadKey::Up),
+        Scancode::Down => Some(JoypadKey::Down),
+        Scancode::Left => Some(JoypadKey::Left),
+        Scancode::Right => Some(JoypadKey::Right),
+        Scancode::Z => Some(JoypadKey::A),
+        Scancode::X => Some(JoypadKey::B),
+        Scancode::Return | Scancode::Space => Some(JoypadKey::Start),
+        Scancode::RShift => Some(JoypadKey::Select),
+        _ => None,
     }
 }

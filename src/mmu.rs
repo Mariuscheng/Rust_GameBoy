@@ -43,13 +43,11 @@ pub struct Mmu {
     pub ram_state: EnableState,
     pub banking_mode: u8, // 0 = ROM banking, 1 = RAM banking
 
-    opcodes: cpu::Opcodes, // 儲存操作碼資料
     io_handler: Option<Box<dyn IoHandler>>,
 }
 
 impl Mmu {
     pub fn new() -> Self {
-        let opcodes = cpu::load_opcodes().expect("無法載入操作碼");
         Mmu {
             rom: vec![0; 0x8000],
             wram: [0; 0x2000],
@@ -69,7 +67,6 @@ impl Mmu {
             ram_state: EnableState::Disabled,
             banking_mode: 0,
 
-            opcodes,
             io_handler: None,
         }
     }
@@ -79,9 +76,9 @@ impl Mmu {
         self.io_handler = Some(handler);
     }
 
-    // 獲取操作碼引用
+    // 獲取操作碼引用 (現在改為引用全域靜態變數)
     pub fn get_opcodes(&self) -> &cpu::Opcodes {
-        &self.opcodes
+        &cpu::OPCODES
     }
 }
 

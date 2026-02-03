@@ -17,10 +17,10 @@ struct GameBoyIoWrapper {
 impl GameBoyIoWrapper {
     fn new(ppu: &Ppu, apu: &Apu, timer: &Timer, joypad: &Joypad) -> Self {
         GameBoyIoWrapper {
-            ppu: ppu as *const _,
-            apu: apu as *const _,
-            timer: timer as *const _,
-            joypad: joypad as *const _,
+            ppu: std::ptr::from_ref(ppu),
+            apu: std::ptr::from_ref(apu),
+            timer: std::ptr::from_ref(timer),
+            joypad: std::ptr::from_ref(joypad),
         }
     }
 }
@@ -33,7 +33,7 @@ impl IoHandler for GameBoyIoWrapper {
                     if !self.joypad.is_null() {
                         (*self.joypad).read_register()
                     } else {
-                        0x0F
+                        0xFF
                     }
                 }
                 0xFF04..=0xFF07 => {

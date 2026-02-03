@@ -19,8 +19,9 @@ fn main() {
         return;
     }
 
-    let rom_path = args[1].clone();
+    let rom_path = std::path::absolute(&args[1]).expect("Invalid path");
+    let rom_path_str = rom_path.to_string_lossy().into_owned();
 
     // 直接進入 SDL3 主程式
-    sdl3::main(rom_path);
+    sdl3::main(rom_path_str);
 }

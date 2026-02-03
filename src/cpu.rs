@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 use std::fs;
+use std::sync::LazyLock;
+
+/// 全域操作碼快取 (Rust 1.80.0+)
+pub static OPCODES: LazyLock<Opcodes> =
+    LazyLock::new(|| load_opcodes().expect("Failed to load Opcodes.json"));
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Operand {
@@ -276,12 +281,12 @@ impl Cpu {
         let first_byte = self.fetch_byte(mmu);
         let pc_before = self.pc.wrapping_sub(1);
 
-        // 查找操作碼
+        // 查找操作碼 (直接引用全域靜態變數，避免借用 mmu)
         let opcode_opt = if first_byte == 0xCB {
             let second_byte = self.fetch_byte(mmu);
-            mmu.get_opcodes().cbprefixed[second_byte as usize].clone()
+            OPCODES.cbprefixed[second_byte as usize].as_ref()
         } else {
-            mmu.get_opcodes().unprefixed[first_byte as usize].clone()
+            OPCODES.unprefixed[first_byte as usize].as_ref()
         };
 
         // 跟蹤指令計數器 - 全局可訪問
@@ -608,10 +613,10 @@ pub fn get_opcode_from_bytes<'a>(
     second_byte: Option<u8>,
 ) -> Option<&'a Opcode> {
     if first_byte == 0xCB {
-        if let Some(second) = second_byte {
-            return opcodes.cbprefixed[second as usize].as_ref();
-        }
-        return None;
+        let Some(second) = second_byte else {
+            return None;
+        };
+        return opcodes.cbprefixed[second as usize].as_ref();
     }
     opcodes.unprefixed[first_byte as usize].as_ref()
 }
