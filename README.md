@@ -11,7 +11,6 @@
 | Gremlins 2 | ✅ |
 | Dr.Mario | ❌ |
 | Tetris | ❌ |
-| 方塊類遊戲 | ❌ |
 | PC指令錯誤（bug) | ❌ |
 
 ## 測試結果
