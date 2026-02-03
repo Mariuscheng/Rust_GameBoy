@@ -5,6 +5,7 @@
 ## ⚠️ 目前狀態
 
 | 測試 | 結果 |
+|------|------|
 | Wario Land 3 | ✅ |
 | Hyper Lode Runner | ✅ |
 | Gremlins 2 | ✅ |
@@ -140,6 +141,7 @@ cargo run --release -- <your_game>.gb
 - 通過更多測試 ROM
 
 - 支援更多 MBC 類型
+
 
 
 
