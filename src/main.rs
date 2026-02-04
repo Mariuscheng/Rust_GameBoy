@@ -10,7 +10,7 @@ mod sdl3;
 mod timer;
 
 fn main() {
-    println!("=== 啟動 Game Boy 模擬器 ===");
+    // println!("=== 啟動 Game Boy 模擬器 ===");
 
     // 獲取命令行參數
     let args: Vec<String> = std::env::args().collect();

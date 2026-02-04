@@ -548,21 +548,19 @@ impl Ppu {
                 }
 
                 if self.dots >= 80 {
-                    self.dots = 0;
                     // OAM 搜索結束後排序精靈
                     self.sort_sprites();
                     self.change_mode(LcdMode::PixelTransfer, interrupt_flags);
                 }
             }
             LcdMode::PixelTransfer => {
-                if self.dots >= 172 {
-                    self.dots = 0;
+                if self.dots >= 252 {
                     self.render_scanline(mmu);
                     self.change_mode(LcdMode::HBlank, interrupt_flags);
                 }
             }
             LcdMode::HBlank => {
-                if self.dots >= 204 {
+                if self.dots >= 456 {
                     self.dots = 0;
                     self.ly += 1;
 

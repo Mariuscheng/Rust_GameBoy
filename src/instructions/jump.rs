@@ -41,7 +41,7 @@ pub fn handle_jr(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
             "e8" => {
                 // JR e8 - 相對跳轉 (無條件，總是 taken)
                 let offset = cpu.fetch_byte(mmu) as i8;
-                cpu.pc = (cpu.pc as i16 + offset as i16) as u16;
+                cpu.pc = cpu.pc.wrapping_add_signed(offset as i16);
                 cpu.branch_taken = true;
             }
             _ => {
@@ -49,7 +49,7 @@ pub fn handle_jr(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
                 if let Some(condition) = get_condition(&opcode.operands[0].name) {
                     let offset = cpu.fetch_byte(mmu) as i8;
                     if check_condition(cpu, condition) {
-                        cpu.pc = (cpu.pc as i16 + offset as i16) as u16;
+                        cpu.pc = cpu.pc.wrapping_add_signed(offset as i16);
                         cpu.branch_taken = true;
                     }
                 }

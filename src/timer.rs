@@ -36,10 +36,13 @@ impl Timer {
     }
 
     // 檢測 falling edge 並更新 TIMA
-    fn check_falling_edge(&mut self, old_bit: u16, new_bit: u16, interrupt_flags: &mut u8) {
+    fn check_falling_edge(&mut self, old_bit: u16, new_bit: u16, interrupt_flags: &mut u8) -> bool {
         // Timer 必須啟用且發生 falling edge (1 -> 0)
         if old_bit == 1 && new_bit == 0 {
             self.increment_tima(interrupt_flags);
+            true
+        } else {
+            false
         }
     }
 
@@ -58,7 +61,9 @@ impl Timer {
     }
 
     // 每個 T-狀態 (4.194MHz) 調用一次
-    pub fn tick(&mut self, interrupt_flags: &mut u8) {
+    pub fn tick(&mut self, interrupt_flags: &mut u8) -> bool {
+        let mut tima_incremented = false;
+
         // 處理溢出延遲
         if self.pending_overflow {
             self.overflow_cycles -= 1;
@@ -82,8 +87,10 @@ impl Timer {
 
         // 檢測 falling edge
         if timer_enabled {
-            self.check_falling_edge(old_bit, new_bit, interrupt_flags);
+            tima_incremented = self.check_falling_edge(old_bit, new_bit, interrupt_flags);
         }
+
+        tima_incremented
     }
 
     pub fn read_register(&self, addr: u16) -> u8 {
