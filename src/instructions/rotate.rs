@@ -306,7 +306,7 @@ pub fn handle_swap(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
     let name = &opcode.operands[0].name;
     let imm = opcode.operands[0].immediate;
     let val = get_operand_value(cpu, mmu, name, imm);
-    let res = (val >> 4) | (val << 4);
+    let res = val.rotate_left(4);
     set_operand_value(cpu, mmu, name, imm, res);
     cpu.set_flag_z(res == 0);
     cpu.set_flag_n(false);

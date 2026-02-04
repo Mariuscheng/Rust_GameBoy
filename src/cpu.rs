@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 
 /// 全域操作碼快取 (Rust 1.80.0+)
 pub static OPCODES: LazyLock<Opcodes> =
-    LazyLock::new(|| load_opcodes().expect("Failed to load Opcodes.json"));
+    LazyLock::new(|| load_opcodes().expect("無法載入 Opcodes.json 檔案。請確保檔案存在且格式正確。"));
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Operand {

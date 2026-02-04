@@ -2,7 +2,7 @@
 
 use crate::apu::Apu;
 use crate::cpu::Cpu;
-use crate::joypad::{GameBoyButton, Joypad};
+use crate::joypad::Joypad;
 use crate::mmu::{IoHandler, Mmu};
 use crate::ppu::Ppu;
 use crate::timer::Timer;
@@ -1075,30 +1075,6 @@ impl GameBoy {
     #[allow(dead_code)]
     pub fn should_render(&self) -> bool {
         self.ppu.mode == crate::ppu::LcdMode::VBlank && self.ppu.ly == 144
-    }
-
-    // Handle input events
-    #[allow(dead_code)]
-    pub fn handle_input_event(&mut self, button: GameBoyButton, pressed: bool) {
-        // Convert to joypad key and process
-        let joypad_key = match button {
-            GameBoyButton::A => crate::joypad::JoypadKey::A,
-            GameBoyButton::B => crate::joypad::JoypadKey::B,
-            GameBoyButton::Select => crate::joypad::JoypadKey::Select,
-            GameBoyButton::Start => crate::joypad::JoypadKey::Start,
-            GameBoyButton::Right => crate::joypad::JoypadKey::Right,
-            GameBoyButton::Left => crate::joypad::JoypadKey::Left,
-            GameBoyButton::Up => crate::joypad::JoypadKey::Up,
-            GameBoyButton::Down => crate::joypad::JoypadKey::Down,
-        };
-
-        // Process the input and check for interrupt
-        let interrupt_triggered = self.joypad.set_key(joypad_key, pressed);
-
-        // If interrupt was triggered, set the interrupt flag
-        if interrupt_triggered {
-            self.mmu.if_reg |= 0x10; // Set joypad interrupt flag (bit 4)
-        }
     }
 }
 

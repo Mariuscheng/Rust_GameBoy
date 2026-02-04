@@ -3,39 +3,6 @@
 use crate::gameboy::{InterruptHandler, InterruptType};
 use std::time::{Duration, Instant};
 
-/// Game Boy button types for input mapping
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum GameBoyButton {
-    A,
-    B,
-    Select,
-    Start,
-    Right,
-    Left,
-    Up,
-    Down,
-}
-
-/// Input event types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum InputEventType {
-    ButtonPress,
-    ButtonRelease,
-}
-
-/// Input event structure
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct InputEvent {
-    pub event_type: InputEventType,
-    pub button: GameBoyButton,
-    pub timestamp: Instant,
-    pub sdl_timestamp: u32,
-    pub processing_latency: Option<Duration>,
-}
-
 pub struct Joypad {
     // 按鍵狀態 (0 代表按下，1 代表放開)
     // 位元: 0=A/右, 1=B/左, 2=Select/上, 3=Start/下
@@ -78,8 +45,6 @@ impl Default for KeyState {
 #[derive(Debug, Clone)]
 pub struct DebounceFilter {
     pub debounce_threshold: Duration, // 去抖動閾值 (通常 5-10ms)
-    #[allow(dead_code)]
-    pub last_bounce_check: Instant,
     pub bounce_events_filtered: u64,
 }
 
@@ -87,7 +52,6 @@ impl Default for DebounceFilter {
     fn default() -> Self {
         Self {
             debounce_threshold: Duration::from_millis(5), // 5ms 去抖動
-            last_bounce_check: Instant::now(),
             bounce_events_filtered: 0,
         }
     }

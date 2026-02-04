@@ -198,7 +198,7 @@ pub fn handle_ld(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
 
             // 暫存器間傳輸 - 8 位元暫存器
             ("A", Some(true), _, _, "A", Some(true), _, _) => {
-                cpu.registers.a = cpu.registers.a;
+                // A = A, no operation needed
             }
             ("A", Some(true), _, _, "B", Some(true), _, _) => {
                 cpu.registers.a = cpu.registers.b;
@@ -223,7 +223,7 @@ pub fn handle_ld(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
                 cpu.registers.b = cpu.registers.a;
             }
             ("B", Some(true), _, _, "B", Some(true), _, _) => {
-                cpu.registers.b = cpu.registers.b;
+                // B = B, no operation needed
             }
             ("B", Some(true), _, _, "C", Some(true), _, _) => {
                 cpu.registers.b = cpu.registers.c;
@@ -248,7 +248,7 @@ pub fn handle_ld(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
                 cpu.registers.c = cpu.registers.b;
             }
             ("C", Some(true), _, _, "C", Some(true), _, _) => {
-                cpu.registers.c = cpu.registers.c;
+                // C = C, no operation needed
             }
             ("C", Some(true), _, _, "D", Some(true), _, _) => {
                 cpu.registers.c = cpu.registers.d;
@@ -273,7 +273,7 @@ pub fn handle_ld(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
                 cpu.registers.d = cpu.registers.c;
             }
             ("D", Some(true), _, _, "D", Some(true), _, _) => {
-                cpu.registers.d = cpu.registers.d;
+                // D = D, no operation needed
             }
             ("D", Some(true), _, _, "E", Some(true), _, _) => {
                 cpu.registers.d = cpu.registers.e;
@@ -298,7 +298,7 @@ pub fn handle_ld(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
                 cpu.registers.e = cpu.registers.d;
             }
             ("E", Some(true), _, _, "E", Some(true), _, _) => {
-                cpu.registers.e = cpu.registers.e;
+                // E = E, no operation needed
             }
             ("E", Some(true), _, _, "H", Some(true), _, _) => {
                 cpu.registers.e = cpu.registers.h;
@@ -323,7 +323,7 @@ pub fn handle_ld(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
                 cpu.registers.h = cpu.registers.e;
             }
             ("H", Some(true), _, _, "H", Some(true), _, _) => {
-                cpu.registers.h = cpu.registers.h;
+                // H = H, no operation needed
             }
             ("H", Some(true), _, _, "L", Some(true), _, _) => {
                 cpu.registers.h = cpu.registers.l;
@@ -348,7 +348,7 @@ pub fn handle_ld(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
                 cpu.registers.l = cpu.registers.h;
             }
             ("L", Some(true), _, _, "L", Some(true), _, _) => {
-                cpu.registers.l = cpu.registers.l;
+                // L = L, no operation needed
             }
 
             // 特殊載入指令 (自增/自減)

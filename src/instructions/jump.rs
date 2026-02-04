@@ -7,7 +7,7 @@ use crate::mmu::Mmu;
 
 /// 處理 JP (Jump) 指令
 pub fn handle_jp(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
-    if opcode.operands.len() >= 1 {
+    if !opcode.operands.is_empty() {
         match opcode.operands[0].name.as_str() {
             "a16" => {
                 // JP a16 - 絕對跳轉 (無條件，總是 taken)
@@ -36,7 +36,7 @@ pub fn handle_jp(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
 
 /// 處理 JR (Jump Relative) 指令
 pub fn handle_jr(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
-    if opcode.operands.len() >= 1 {
+    if !opcode.operands.is_empty() {
         match opcode.operands[0].name.as_str() {
             "e8" => {
                 // JR e8 - 相對跳轉 (無條件，總是 taken)
@@ -60,7 +60,7 @@ pub fn handle_jr(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
 
 /// 處理 CALL 指令
 pub fn handle_call(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
-    if opcode.operands.len() >= 1 {
+    if !opcode.operands.is_empty() {
         match opcode.operands[0].name.as_str() {
             "a16" => {
                 // CALL a16 - 呼叫子程序 (無條件，總是 taken)
@@ -92,12 +92,11 @@ pub fn handle_ret(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
         cpu.branch_taken = true;
     } else {
         // RET cc - 條件返回
-        if let Some(condition) = get_condition(&opcode.operands[0].name) {
-            if check_condition(cpu, condition) {
+        if let Some(condition) = get_condition(&opcode.operands[0].name)
+            && check_condition(cpu, condition) {
                 cpu.pc = cpu.pop_word(&*mmu);
                 cpu.branch_taken = true;
             }
-        }
     }
 }
 

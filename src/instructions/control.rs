@@ -26,6 +26,7 @@ pub fn handle_di(cpu: &mut Cpu, _mmu: &mut Mmu, _opcode: &crate::cpu::Opcode) {
 }
 
 /// 處理 EI 指令 (啟用中斷)
+#[allow(dead_code)]
 pub fn handle_ei(cpu: &mut Cpu, _mmu: &mut Mmu, _opcode: &crate::cpu::Opcode) {
     // EI 不會立即生效，而是在下一個指令之後啟用 IME
     cpu.ime = crate::cpu::InterruptMasterState::Pending;

@@ -7,7 +7,7 @@ use crate::mmu::Mmu;
 
 /// 處理 INC (Increment) 指令
 pub fn handle_inc(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
-    if opcode.operands.len() >= 1 {
+    if !opcode.operands.is_empty() {
         let op = &opcode.operands[0];
         let name = op.name.as_str();
         let imm = op.immediate.unwrap_or(true);
@@ -96,7 +96,7 @@ pub fn handle_inc(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
 
 /// 處理 DEC (Decrement) 指令
 pub fn handle_dec(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
-    if opcode.operands.len() >= 1 {
+    if !opcode.operands.is_empty() {
         let op = &opcode.operands[0];
         let name = op.name.as_str();
         let imm = op.immediate.unwrap_or(true);

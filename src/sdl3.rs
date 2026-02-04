@@ -15,6 +15,47 @@ use std::collections::VecDeque;
 use std::default::Default;
 use std::time::{Duration, Instant};
 
+/// 錯誤類型
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum EmulatorError {
+    SdlInit(String),
+    VideoSubsystem(String),
+    AudioSubsystem(String),
+    AudioStream(String),
+    WindowCreation(String),
+    CanvasCreation(String),
+    TextureCreation(String),
+    RomLoad(String),
+    EventPump(String),
+    TextureUpdate(String),
+    CanvasCopy(String),
+    InvalidPath(String),
+    OpcodesLoad(String),
+}
+
+impl std::fmt::Display for EmulatorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EmulatorError::SdlInit(msg) => write!(f, "SDL 初始化失敗: {}", msg),
+            EmulatorError::VideoSubsystem(msg) => write!(f, "視訊子系統初始化失敗: {}", msg),
+            EmulatorError::AudioSubsystem(msg) => write!(f, "音訊子系統初始化失敗: {}", msg),
+            EmulatorError::AudioStream(msg) => write!(f, "音訊串流創建失敗: {}", msg),
+            EmulatorError::WindowCreation(msg) => write!(f, "視窗創建失敗: {}", msg),
+            EmulatorError::CanvasCreation(msg) => write!(f, "畫布創建失敗: {}", msg),
+            EmulatorError::TextureCreation(msg) => write!(f, "紋理創建失敗: {}", msg),
+            EmulatorError::RomLoad(msg) => write!(f, "ROM 載入失敗: {}", msg),
+            EmulatorError::EventPump(msg) => write!(f, "事件泵初始化失敗: {}", msg),
+            EmulatorError::TextureUpdate(msg) => write!(f, "紋理更新失敗: {}", msg),
+            EmulatorError::CanvasCopy(msg) => write!(f, "畫布複製失敗: {}", msg),
+            EmulatorError::InvalidPath(msg) => write!(f, "無效路徑: {}", msg),
+            EmulatorError::OpcodesLoad(msg) => write!(f, "操作碼載入失敗: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for EmulatorError {}
+
 /// Configuration for input processing
 #[derive(Debug, Clone)]
 pub struct InputConfig {
@@ -366,9 +407,9 @@ impl AudioCallback<f32> for GbAudio {
 }
 
 pub fn main(rom_path: String) {
-    let sdl_context = sdl3::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let audio_subsystem = sdl_context.audio().unwrap();
+    let sdl_context = sdl3::init().expect("SDL 初始化失敗");
+    let video_subsystem = sdl_context.video().expect("視訊子系統初始化失敗");
+    let audio_subsystem = sdl_context.audio().expect("音訊子系統初始化失敗");
 
     // Configure SDL3 for low-latency input processing
     configure_sdl3_low_latency();
@@ -383,21 +424,21 @@ pub fn main(rom_path: String) {
 
     let stream = audio_subsystem
         .open_playback_stream(&spec, GbAudio { receiver: rx })
-        .unwrap();
-    stream.resume().unwrap();
+        .expect("音訊串流創建失敗");
+    stream.resume().expect("音訊串流恢復失敗");
 
     let window = video_subsystem
         .window("GameBoy", 800, 600)
         .position_centered()
         .resizable()
         .build()
-        .unwrap();
+        .expect("視窗創建失敗");
 
     let mut canvas = window.into_canvas();
     let texture_creator = canvas.texture_creator();
     let mut stream_tex = texture_creator
         .create_texture_streaming(PixelFormat::ABGR8888, 160, 144)
-        .unwrap();
+        .expect("紋理創建失敗");
 
     // 預先分配 RGBA 緩衝區，避免每幀重複分配
     const W: u32 = 160;
@@ -406,7 +447,7 @@ pub fn main(rom_path: String) {
 
     // emulator instance
     let mut gb = GameBoy::new();
-    gb.load_rom(&rom_path).expect("Failed to load ROM");
+    gb.load_rom(&rom_path).expect("ROM 載入失敗");
 
     // Create input manager
     let mut input_config = InputConfig {
@@ -425,7 +466,7 @@ pub fn main(rom_path: String) {
     let mut input_manager = InputManager::with_config(input_config);
     input_manager.apply_timing_config(); // Apply timing configuration
 
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut event_pump = sdl_context.event_pump().expect("事件泵初始化失敗");
 
     // Game Boy 精確幀率: 59.7275 FPS
     let frame_duration = Duration::from_nanos(16_742_706);
@@ -438,7 +479,7 @@ pub fn main(rom_path: String) {
     let mut _input_processing_overruns = 0;
     let mut _frame_timing_overruns = 0;
 
-    'running: loop {
+    loop {
         let frame_start = Instant::now();
         frame_count += 1;
 
@@ -481,7 +522,7 @@ pub fn main(rom_path: String) {
 
             // Performance summary removed for cleaner output
 
-            break 'running;
+            return;
         }
 
         // Run first half of frame
@@ -546,7 +587,10 @@ pub fn main(rom_path: String) {
         }
 
         // --- upload to streaming texture and draw ---
-        stream_tex.update(None, &rgba, (W * 4) as usize).unwrap();
+        if let Err(e) = stream_tex.update(None, &rgba, (W * 4) as usize) {
+            eprintln!("Texture update failed: {}", e);
+            continue;
+        }
 
         let (win_w, win_h) = canvas.window().size();
         let scale = (win_w as f32 / W as f32)
@@ -559,7 +603,10 @@ pub fn main(rom_path: String) {
         let dst_y = (win_h - dest_h) / 2;
         let dest = Rect::new(dst_x as i32, dst_y as i32, dest_w, dest_h);
 
-        canvas.copy(&stream_tex, None, dest).unwrap();
+        if let Err(e) = canvas.copy(&stream_tex, None, dest) {
+            eprintln!("Canvas copy failed: {}", e);
+            continue;
+        }
         canvas.present();
 
         // Handle frame timing for split-frame execution

@@ -46,7 +46,7 @@ pub fn handle_add(cpu: &mut Cpu, mmu: &mut Mmu, opcode: &crate::cpu::Opcode) {
             cpu.set_flag_z(false);
             cpu.set_flag_n(false);
             cpu.set_flag_h(((cpu.sp & 0x0F) as i32 + (val & 0x0F) as i32) > 0x0F);
-            cpu.set_flag_c(((cpu.sp & 0xFF) as i32 + (val & 0xFF) as i32) > 0xFF);
+            cpu.set_flag_c(((cpu.sp & 0xFF) as i32 + val as i32) > 0xFF);
             cpu.sp = (result & 0xFFFF) as u16;
             return;
         }

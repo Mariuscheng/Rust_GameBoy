@@ -1,13 +1,6 @@
 // PPU (Picture Processing Unit) - Game Boy 圖形處理器
 
-/// 功能啟用狀態
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum EnableState {
-    /// 已啟用
-    Enabled,
-    /// 已停用
-    Disabled,
-}
+use crate::mmu::EnableState;
 
 /// Tile 數據定址模式
 #[derive(Debug, Clone, Copy, PartialEq)]

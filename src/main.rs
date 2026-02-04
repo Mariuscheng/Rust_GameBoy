@@ -19,7 +19,12 @@ fn main() {
         return;
     }
 
-    let rom_path = std::path::absolute(&args[1]).expect("Invalid path");
+    let rom_path = std::path::absolute(&args[1])
+        .map_err(|e| {
+            eprintln!("無效路徑: {}", e);
+            std::process::exit(1);
+        })
+        .unwrap();
     let rom_path_str = rom_path.to_string_lossy().into_owned();
 
     // 直接進入 SDL3 主程式
