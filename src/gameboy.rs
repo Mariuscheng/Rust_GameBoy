@@ -906,12 +906,12 @@ impl GameBoy {
                 if cycle % 4 == 0 {
                     // Check more frequently during interrupt processing
                     let tac = self.timer.tac;
-                    if let Err(e) = self.timing_controller.validate_timer_timing(
+                    if let Err(_e) = self.timing_controller.validate_timer_timing(
                         tac,
                         self.timer.div,
                         self.timer_cycles_since_increment,
                     ) {
-                        eprintln!("Timer timing validation error during interrupt: {}", e);
+                        // Timer timing validation error during interrupt (removed println)
                     }
                 }
 
@@ -976,12 +976,12 @@ impl GameBoy {
             if cycle % 64 == 0 {
                 // Check every 64 cycles
                 let tac = self.timer.tac;
-                if let Err(e) = self.timing_controller.validate_timer_timing(
+                if let Err(_e) = self.timing_controller.validate_timer_timing(
                     tac,
                     self.timer.div,
                     self.timer_cycles_since_increment,
                 ) {
-                    eprintln!("Timer timing validation error: {}", e);
+                    // Timer timing validation error (removed println)
                 }
             }
 
