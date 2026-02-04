@@ -540,7 +540,7 @@ impl Ppu {
             LcdMode::OamSearch => {
                 // 每 2 個點檢查一個精靈
                 // dots 從 1 開始，所以 dots=1,2 檢查 sprite 0，dots=3,4 檢查 sprite 1，以此類推
-                if self.dots % 2 == 0 {
+                if self.dots.is_multiple_of(2) {
                     let sprite_index = (self.dots / 2 - 1) as usize;
                     if sprite_index < 40 {
                         self.check_sprite_visibility(mmu, sprite_index);

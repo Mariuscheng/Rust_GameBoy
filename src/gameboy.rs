@@ -9,27 +9,72 @@ use crate::timer::Timer;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+// Custom error types for better error handling (Rust 1.93.0 improvements)
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum GameBoyError {
+    RomLoad {
+        path: String,
+        source: Box<dyn std::error::Error>,
+    },
+    Timing(String),
+    Interrupt(String),
+    Io(std::io::Error),
+}
+
+impl std::fmt::Display for GameBoyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GameBoyError::RomLoad { path, source } => {
+                write!(f, "Failed to load ROM '{}': {}", path, source)
+            }
+            GameBoyError::Timing(msg) => write!(f, "Timing error: {}", msg),
+            GameBoyError::Interrupt(msg) => write!(f, "Interrupt error: {}", msg),
+            GameBoyError::Io(err) => write!(f, "I/O error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for GameBoyError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            GameBoyError::RomLoad { source, .. } => Some(source.as_ref()),
+            GameBoyError::Io(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for GameBoyError {
+    fn from(err: std::io::Error) -> Self {
+        GameBoyError::Io(err)
+    }
+}
+
 // Timing Controller Module - Precise frame timing and synchronization
 // Implements 59.7275 FPS timing with 0.1% accuracy and 70224 cycles per frame validation
 
-/// Game Boy timing constants
+/// Game Boy timing constants with improved precision (Rust 1.93.0 const improvements)
 const GAMEBOY_FRAME_RATE: f64 = 59.7275; // Hz
 const GAMEBOY_CYCLES_PER_FRAME: u64 = 70224;
-const GAMEBOY_CYCLE_FREQUENCY: f64 = 4_194_304.0; // Hz (4.194304 MHz)
+
+/// Pre-calculated frame duration constant using const fn (Rust 1.93.0 enhancement)
+const GAMEBOY_FRAME_DURATION: Duration = {
+    // Convert fps to nanoseconds: (1/fps) * 1_000_000_000
+    let nanos = (1_000_000_000.0 / GAMEBOY_FRAME_RATE) as u64;
+    Duration::from_nanos(nanos)
+};
 
 /// Timing modes for different game requirements
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TimingMode {
     /// Strict Game Boy timing (59.7275 FPS)
     Strict,
-    /// Adaptive timing based on host performance
-    Adaptive,
-    /// Variable timing for testing/debugging
-    Variable,
 }
 
 /// Frame timing statistics
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct FrameTimingStats {
     pub target_frame_time: Duration,
     pub actual_frame_time: Duration,
@@ -42,6 +87,7 @@ pub struct FrameTimingStats {
 }
 
 /// Timing controller for precise frame synchronization
+#[allow(dead_code)]
 pub struct TimingController {
     /// Current timing mode
     mode: TimingMode,
@@ -63,12 +109,13 @@ pub struct TimingController {
     enabled: bool,
 }
 
+#[allow(dead_code)]
 impl TimingController {
     /// Create a new timing controller with default Game Boy settings
     pub fn new() -> Self {
         let target_fps = GAMEBOY_FRAME_RATE;
         let target_cycles_per_frame = GAMEBOY_CYCLES_PER_FRAME;
-        let target_frame_duration = Duration::from_nanos((1_000_000_000.0 / target_fps) as u64);
+        let target_frame_duration = GAMEBOY_FRAME_DURATION;
 
         Self {
             mode: TimingMode::Strict,
@@ -141,15 +188,10 @@ impl TimingController {
         let actual_frame_time = frame_end.duration_since(frame_start);
 
         // Calculate timing accuracy
-        let frame_time_error = if actual_frame_time > self.target_frame_duration {
-            actual_frame_time - self.target_frame_duration
-        } else {
-            self.target_frame_duration - actual_frame_time
-        };
+        let frame_time_error = actual_frame_time.abs_diff(self.target_frame_duration);
 
         let frame_time_accuracy = if actual_frame_time.as_nanos() > 0 {
             let target_nanos = self.target_frame_duration.as_nanos() as f64;
-            let actual_nanos = actual_frame_time.as_nanos() as f64;
             1.0 - (frame_time_error.as_nanos() as f64 / target_nanos).abs()
         } else {
             0.0
@@ -191,7 +233,7 @@ impl TimingController {
 
     /// Wait until the target frame time is reached (for strict timing)
     pub fn wait_for_frame_time(&self, frame_start: Instant) -> Duration {
-        if !self.enabled || self.mode == TimingMode::Variable {
+        if !self.enabled {
             return Duration::ZERO;
         }
 
@@ -354,7 +396,7 @@ impl TimingController {
             }
             3 => {
                 // Pixel Transfer - should be at dots 80-251
-                if dots < 80 || dots > 251 {
+                if !(80..=251).contains(&dots) {
                     return Err(format!(
                         "Pixel Transfer mode at invalid dots: {} (should be 80-251)",
                         dots
@@ -372,7 +414,6 @@ impl TimingController {
     pub fn validate_timer_timing(
         &self,
         tac: u8,
-        div_counter: u16,
         cycles_since_last_increment: u64,
     ) -> Result<(), String> {
         let timer_enabled = (tac & 0x04) != 0;
@@ -435,8 +476,6 @@ impl Default for TimingController {
 }
 
 /// Game Boy interrupt types
-
-/// Game Boy interrupt types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InterruptType {
     VBlank,
@@ -448,6 +487,7 @@ pub enum InterruptType {
 
 /// Game-specific interrupt configuration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GameInterruptConfig {
     /// Game identifier (ROM hash or name)
     pub game_id: String,
@@ -501,6 +541,7 @@ impl Default for InterruptStatistics {
 
 /// Joypad interrupt delay tracking for 4-cycle optimization
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct JoypadInterruptDelay {
     trigger_time: Instant,
     cycles_remaining: u8,
@@ -676,6 +717,7 @@ pub struct GameBoy {
     ppu_dots_this_frame: u32,
     // Timer timing validation
     timer_cycles_since_increment: u64,
+    #[allow(dead_code)]
     last_timer_increment_cycle: u64,
 }
 
@@ -722,26 +764,26 @@ impl GameBoy {
     }
 
     // 載入 ROM
-    pub fn load_rom(&mut self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        self.mmu.load_rom(path)?;
+    pub fn load_rom(&mut self, path: &str) -> Result<(), GameBoyError> {
+        self.mmu.load_rom(path).map_err(|e| GameBoyError::RomLoad {
+            path: path.to_string(),
+            source: e,
+        })?;
 
         // Auto-configure interrupt handler for the loaded game
-        if let Some(filename) = std::path::Path::new(path).file_name() {
-            if let Some(filename_str) = filename.to_str() {
-                self.interrupt_handler.auto_configure_for_game(filename_str);
+        if let Some(filename) = std::path::Path::new(path).file_name()
+            && let Some(filename_str) = filename.to_str()
+        {
+            self.interrupt_handler.auto_configure_for_game(filename_str);
 
-                // Configure timing controller for the loaded game
-                let (fps, cycles) = TimingController::get_game_timing_requirements(filename_str);
-                if fps != self.timing_controller.get_target_fps()
-                    || cycles != self.timing_controller.get_target_cycles_per_frame()
-                {
-                    // Create new timing controller with game-specific settings
-                    self.timing_controller = TimingController::with_settings(
-                        fps,
-                        cycles,
-                        self.timing_controller.get_mode(),
-                    );
-                }
+            // Configure timing controller for the loaded game
+            let (fps, cycles) = TimingController::get_game_timing_requirements(filename_str);
+            if fps != self.timing_controller.get_target_fps()
+                || cycles != self.timing_controller.get_target_cycles_per_frame()
+            {
+                // Create new timing controller with game-specific settings
+                self.timing_controller =
+                    TimingController::with_settings(fps, cycles, self.timing_controller.get_mode());
             }
         }
 
@@ -749,6 +791,7 @@ impl GameBoy {
     }
 
     // 執行一個完整的幀 (70224 個時鐘循環)
+    #[allow(dead_code)]
     pub fn run_frame(&mut self) {
         let frame_start = self.timing_controller.start_frame();
         let frame_cycles = self.timing_controller.get_target_cycles_per_frame();
@@ -768,12 +811,12 @@ impl GameBoy {
         }
 
         // End frame timing and get statistics
-        let timing_stats = self
+        let _timing_stats = self
             .timing_controller
             .end_frame(frame_start, frame_cycle_count);
 
         // Wait for target frame time if in strict mode
-        let wait_duration = self.timing_controller.wait_for_frame_time(frame_start);
+        let _wait_duration = self.timing_controller.wait_for_frame_time(frame_start);
 
         // Validate cycle count
         if !self
@@ -821,7 +864,7 @@ impl GameBoy {
     // 執行一個 CPU 指令，並在執行期間同步更新 Timer 和 PPU
     fn step_cpu_with_timing(&mut self) -> u32 {
         // 處理 joypad 中斷延遲 (4-cycle 優化)
-        let joypad_triggered = self.interrupt_handler.process_joypad_interrupt_delay();
+        let _joypad_triggered = self.interrupt_handler.process_joypad_interrupt_delay();
 
         // 同步中斷處理器與 MMU
         self.interrupt_handler.ie_register = self.mmu.read_byte(0xFFFF);
@@ -868,8 +911,8 @@ impl GameBoy {
             for cycle in 0..20 {
                 // Track PPU timing before tick
                 let ppu_ly_before = self.ppu.ly;
-                let ppu_dots_before = self.ppu.dots;
-                let ppu_mode_before = self.ppu.mode as u8;
+                let _ppu_dots_before = self.ppu.dots;
+                let _ppu_mode_before = self.ppu.mode as u8;
 
                 // 中斷處理固定消耗20週期
                 self.ppu.tick(&self.mmu, &mut if_reg);
@@ -906,11 +949,10 @@ impl GameBoy {
                 if cycle % 4 == 0 {
                     // Check more frequently during interrupt processing
                     let tac = self.timer.tac;
-                    if let Err(_e) = self.timing_controller.validate_timer_timing(
-                        tac,
-                        self.timer.div,
-                        self.timer_cycles_since_increment,
-                    ) {
+                    if let Err(_e) = self
+                        .timing_controller
+                        .validate_timer_timing(tac, self.timer_cycles_since_increment)
+                    {
                         // Timer timing validation error during interrupt (removed println)
                     }
                 }
@@ -939,8 +981,8 @@ impl GameBoy {
         for cycle in 0..cycles {
             // Track PPU timing before tick
             let ppu_ly_before = self.ppu.ly;
-            let ppu_dots_before = self.ppu.dots;
-            let ppu_mode_before = self.ppu.mode as u8;
+            let _ppu_dots_before = self.ppu.dots;
+            let _ppu_mode_before = self.ppu.mode as u8;
 
             self.ppu.tick(&self.mmu, &mut if_reg);
             let tima_incremented = self.timer.tick(&mut if_reg);
@@ -976,11 +1018,10 @@ impl GameBoy {
             if cycle % 64 == 0 {
                 // Check every 64 cycles
                 let tac = self.timer.tac;
-                if let Err(_e) = self.timing_controller.validate_timer_timing(
-                    tac,
-                    self.timer.div,
-                    self.timer_cycles_since_increment,
-                ) {
+                if let Err(_e) = self
+                    .timing_controller
+                    .validate_timer_timing(tac, self.timer_cycles_since_increment)
+                {
                     // Timer timing validation error (removed println)
                 }
             }
@@ -1031,11 +1072,13 @@ impl GameBoy {
         self.ppu.get_framebuffer()
     }
 
+    #[allow(dead_code)]
     pub fn should_render(&self) -> bool {
         self.ppu.mode == crate::ppu::LcdMode::VBlank && self.ppu.ly == 144
     }
 
     // Handle input events
+    #[allow(dead_code)]
     pub fn handle_input_event(&mut self, button: GameBoyButton, pressed: bool) {
         // Convert to joypad key and process
         let joypad_key = match button {
@@ -1059,6 +1102,7 @@ impl GameBoy {
     }
 }
 
+#[allow(dead_code)]
 impl InterruptHandler {
     pub fn new() -> Self {
         let mut handler = Self {
@@ -1261,32 +1305,31 @@ impl InterruptHandler {
 
                 // Interrupt masking prevention: skip if this interrupt type was just processed
                 // and masking prevention is enabled
-                if self.masking_prevention_enabled {
-                    if let Some(last_processed) = self.last_processed_interrupt {
-                        if last_processed == interrupt_type {
-                            // Allow processing again after a short period, but prefer other interrupts
-                            // Increase priority slightly to allow other interrupts to be processed first
-                            let base_priority = self
-                                .priority_config
-                                .get(&interrupt_type)
-                                .copied()
-                                .unwrap_or(bit);
-                            let adjusted_priority = base_priority.saturating_add(1);
-                            if adjusted_priority < highest_priority {
-                                highest_priority = adjusted_priority;
-                                selected_interrupt = Some(interrupt_type);
-                                selected_vector = match bit {
-                                    0 => 0x40, // VBlank
-                                    1 => 0x48, // LCD STAT
-                                    2 => 0x50, // Timer
-                                    3 => 0x58, // Serial
-                                    4 => 0x60, // Joypad
-                                    _ => 0,
-                                };
-                            }
-                            continue;
-                        }
+                if self.masking_prevention_enabled
+                    && let Some(last_processed) = self.last_processed_interrupt
+                    && last_processed == interrupt_type
+                {
+                    // Allow processing again after a short period, but prefer other interrupts
+                    // Increase priority slightly to allow other interrupts to be processed first
+                    let base_priority = self
+                        .priority_config
+                        .get(&interrupt_type)
+                        .copied()
+                        .unwrap_or(bit);
+                    let adjusted_priority = base_priority.saturating_add(1);
+                    if adjusted_priority < highest_priority {
+                        highest_priority = adjusted_priority;
+                        selected_interrupt = Some(interrupt_type);
+                        selected_vector = match bit {
+                            0 => 0x40, // VBlank
+                            1 => 0x48, // LCD STAT
+                            2 => 0x50, // Timer
+                            3 => 0x58, // Serial
+                            4 => 0x60, // Joypad
+                            _ => 0,
+                        };
                     }
+                    continue;
                 }
 
                 let priority = self
@@ -1316,13 +1359,13 @@ impl InterruptHandler {
     /// Trigger an interrupt with optimized processing and game-specific configuration
     pub fn trigger_interrupt(&mut self, interrupt_type: InterruptType) {
         // Interrupt masking prevention: ensure interrupts aren't masked by recent processing
-        if self.masking_prevention_enabled {
-            if let Some(last_interrupt) = self.last_processed_interrupt {
-                // Prevent rapid successive interrupts of the same type
-                if last_interrupt == interrupt_type {
-                    // Add small delay to prevent masking
-                    std::thread::sleep(Duration::from_micros(10));
-                }
+        if self.masking_prevention_enabled
+            && let Some(last_interrupt) = self.last_processed_interrupt
+        {
+            // Prevent rapid successive interrupts of the same type
+            if last_interrupt == interrupt_type {
+                // Add small delay to prevent masking
+                std::thread::sleep(Duration::from_micros(10));
             }
         }
 
@@ -1410,14 +1453,14 @@ impl InterruptHandler {
     pub fn record_processing_latency(&mut self, interrupt_type: InterruptType, latency: Duration) {
         self.processing_latencies
             .entry(interrupt_type)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(latency);
 
         // Keep only last 100 samples
-        if let Some(latencies) = self.processing_latencies.get_mut(&interrupt_type) {
-            if latencies.len() > 100 {
-                latencies.remove(0);
-            }
+        if let Some(latencies) = self.processing_latencies.get_mut(&interrupt_type)
+            && latencies.len() > 100
+        {
+            latencies.remove(0);
         }
 
         // Update statistics

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::LazyLock;
@@ -54,7 +53,6 @@ pub struct Opcodes {
 pub enum CpuState {
     Running, // 正常運行
     Halted,  // 暫停 (HALT)
-    Stopped, // 停止 (STOP)
 }
 
 /// 中斷主啟用狀態 (IME)
@@ -106,67 +104,6 @@ pub struct CpuFlags {
 }
 
 impl Cpu {
-    // 根據操作碼的旗標規範設置 CPU 旗標
-    fn set_flags_from_spec(
-        &mut self,
-        flags_spec: &Flags,
-        result: Option<u8>,
-        carry: bool,
-        half_carry: bool,
-    ) {
-        // Z 旗標
-        match flags_spec.z.as_str() {
-            "Z" => {
-                self.flags.z = if result.map_or(false, |r| r == 0) {
-                    FlagState::Set
-                } else {
-                    FlagState::Clear
-                }
-            }
-            "0" => self.flags.z = FlagState::Clear,
-            "1" => self.flags.z = FlagState::Set,
-            "-" => {} // 不改變
-            _ => {}
-        }
-
-        // N 旗標
-        match flags_spec.n.as_str() {
-            "0" => self.flags.n = FlagState::Clear,
-            "1" => self.flags.n = FlagState::Set,
-            "-" => {} // 不改變
-            _ => {}
-        }
-
-        // H 旗標
-        match flags_spec.h.as_str() {
-            "H" => {
-                self.flags.h = if half_carry {
-                    FlagState::Set
-                } else {
-                    FlagState::Clear
-                }
-            }
-            "0" => self.flags.h = FlagState::Clear,
-            "1" => self.flags.h = FlagState::Set,
-            "-" => {} // 不改變
-            _ => {}
-        }
-
-        // C 旗標
-        match flags_spec.c.as_str() {
-            "C" => {
-                self.flags.c = if carry {
-                    FlagState::Set
-                } else {
-                    FlagState::Clear
-                }
-            }
-            "0" => self.flags.c = FlagState::Clear,
-            "1" => self.flags.c = FlagState::Set,
-            "-" => {} // 不改變
-            _ => {}
-        }
-    }
     pub fn new() -> Self {
         Cpu {
             pc: 0x0100, // Game Boy 程式起始位址
@@ -355,16 +292,16 @@ impl Cpu {
                 eprintln!("未實作指令: {} 在 PC={:04X}", mnemonic, pc_before);
             }
             // 執行指令
-            crate::instructions::execute_instruction(self, mmu, &opcode);
+            crate::instructions::execute_instruction(self, mmu, opcode);
 
             // 返回指令的週期數
             // 條件分支指令有兩個週期值: cycles[0] = 成立, cycles[1] = 不成立
-            let cycles = if opcode.cycles.len() > 1 && !self.branch_taken {
+            
+            if opcode.cycles.len() > 1 && !self.branch_taken {
                 opcode.cycles[1] as u32
             } else {
                 opcode.cycles[0] as u32
-            };
-            cycles
+            }
         } else {
             eprintln!(
                 "Unknown opcode: {:02X} at PC={:04X}",
@@ -596,37 +533,4 @@ pub fn load_opcodes() -> std::io::Result<Opcodes> {
         unprefixed,
         cbprefixed,
     })
-}
-
-// 根據操作碼字串獲取操作碼 (僅用於相容，不建議在循環中使用)
-pub fn get_opcode<'a>(opcodes: &'a Opcodes, code: &str) -> Option<&'a Opcode> {
-    if let Ok(byte) = u8::from_str_radix(code.trim_start_matches("0x"), 16) {
-        return opcodes.unprefixed[byte as usize].as_ref();
-    }
-    None
-}
-
-// 根據位元組獲取操作碼
-pub fn get_opcode_from_bytes<'a>(
-    opcodes: &'a Opcodes,
-    first_byte: u8,
-    second_byte: Option<u8>,
-) -> Option<&'a Opcode> {
-    if first_byte == 0xCB {
-        let Some(second) = second_byte else {
-            return None;
-        };
-        return opcodes.cbprefixed[second as usize].as_ref();
-    }
-    opcodes.unprefixed[first_byte as usize].as_ref()
-}
-
-fn get_all_opcodes(opcodes: &Opcodes) -> Vec<(String, &Opcode)> {
-    let mut all: Vec<(String, &Opcode)> = Vec::new();
-    for (i, op) in opcodes.unprefixed.iter().enumerate() {
-        if let Some(o) = op {
-            all.push((format!("0x{:02X}", i), o));
-        }
-    }
-    all
 }

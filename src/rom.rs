@@ -3,6 +3,7 @@ use std::io::Read;
 use std::path::Path;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct CartridgeHeader {
     pub title: String,
     pub cartridge_type: u8,
@@ -10,6 +11,7 @@ pub struct CartridgeHeader {
     pub ram_size: u8,
 }
 
+#[allow(dead_code)]
 fn parse_rom_header(rom_data: &[u8]) -> Result<CartridgeHeader, &'static str> {
     if rom_data.len() < 0x150 {
         return Err("ROM too small");
@@ -41,7 +43,10 @@ pub fn read_rom_file(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> 
     Err(format!("ROM file not found: {}", path).into())
 }
 
-pub fn load_and_parse_rom(path: &str) -> Result<(Vec<u8>, CartridgeHeader), Box<dyn std::error::Error>> {
+#[allow(dead_code)]
+pub fn load_and_parse_rom(
+    path: &str,
+) -> Result<(Vec<u8>, CartridgeHeader), Box<dyn std::error::Error>> {
     let rom_data = read_rom_file(path)?;
     let header = parse_rom_header(&rom_data).map_err(|e| e.to_string())?;
     Ok((rom_data, header))

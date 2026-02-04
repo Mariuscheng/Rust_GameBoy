@@ -4,6 +4,7 @@
 use crate::cpu; // 引用 cpu 模組
 use crate::rom; // 引用 rom 模組
 
+#[allow(dead_code)]
 pub trait Memory {
     fn read_byte(&self, address: u16) -> u8;
     fn write_byte(&mut self, address: u16, value: u8);
@@ -77,6 +78,7 @@ impl Mmu {
     }
 
     // 獲取操作碼引用 (現在改為引用全域靜態變數)
+    #[allow(dead_code)]
     pub fn get_opcodes(&self) -> &cpu::Opcodes {
         &cpu::OPCODES
     }
@@ -214,7 +216,7 @@ impl Mmu {
                     if (value & 0x80) != 0 {
                         // 捕獲串口輸出 (用於測試 ROM)
                         let char_byte = self.serial_data;
-                        if char_byte >= 0x20 && char_byte < 0x7F {
+                        if (0x20..0x7F).contains(&char_byte) {
                             self.serial_output.push(char_byte as char);
                         } else if char_byte == 0x0A {
                             self.serial_output.push('\n');
@@ -234,12 +236,10 @@ impl Mmu {
                         handler.as_mut().write_io(address, value, &mut if_reg);
                         self.if_reg = if_reg;
                     }
-                } else {
-                    if let Some(ref mut handler) = self.io_handler {
-                        let mut if_reg = self.if_reg;
-                        handler.as_mut().write_io(address, value, &mut if_reg);
-                        self.if_reg = if_reg;
-                    }
+                } else if let Some(ref mut handler) = self.io_handler {
+                    let mut if_reg = self.if_reg;
+                    handler.as_mut().write_io(address, value, &mut if_reg);
+                    self.if_reg = if_reg;
                 }
             } // I/O 寄存器
             0xFF80..=0xFFFE => self.hram[(address - 0xFF80) as usize] = value, // HRAM

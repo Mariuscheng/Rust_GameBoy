@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 /// Game Boy button types for input mapping
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum GameBoyButton {
     A,
     B,
@@ -18,6 +19,7 @@ pub enum GameBoyButton {
 
 /// Input event types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum InputEventType {
     ButtonPress,
     ButtonRelease,
@@ -25,6 +27,7 @@ pub enum InputEventType {
 
 /// Input event structure
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct InputEvent {
     pub event_type: InputEventType,
     pub button: GameBoyButton,
@@ -50,6 +53,7 @@ pub struct Joypad {
 
 #[derive(Debug, Clone)]
 pub struct KeyState {
+    #[allow(dead_code)]
     pub key: JoypadKey,
     pub pressed: bool,
     pub last_change: Instant,
@@ -74,6 +78,7 @@ impl Default for KeyState {
 #[derive(Debug, Clone)]
 pub struct DebounceFilter {
     pub debounce_threshold: Duration, // 去抖動閾值 (通常 5-10ms)
+    #[allow(dead_code)]
     pub last_bounce_check: Instant,
     pub bounce_events_filtered: u64,
 }
@@ -268,11 +273,9 @@ impl Joypad {
 
         // 如果任何位元從 1 變為 0 (Falling Edge) 且有中斷處理器，觸發優化的 Joypad 中斷
         let should_trigger_interrupt = (old_res & !new_res & 0x0F) != 0;
-        if should_trigger_interrupt {
-            if let Some(handler_ptr) = self.interrupt_handler {
-                unsafe {
-                    (*handler_ptr).trigger_interrupt(InterruptType::Joypad);
-                }
+        if should_trigger_interrupt && let Some(handler_ptr) = self.interrupt_handler {
+            unsafe {
+                (*handler_ptr).trigger_interrupt(InterruptType::Joypad);
             }
         }
 
@@ -297,7 +300,7 @@ impl Joypad {
     fn should_process_key_change(
         &mut self,
         key_index: usize,
-        new_pressed: bool,
+        _new_pressed: bool,
         now: Instant,
     ) -> bool {
         let key_state = &self.key_states[key_index];
@@ -313,11 +316,13 @@ impl Joypad {
     }
 
     /// 獲取按鍵狀態統計信息
+    #[allow(dead_code)]
     pub fn get_key_stats(&self, key: JoypadKey) -> &KeyState {
         &self.key_states[self.key_to_index(key)]
     }
 
     /// 獲取去抖動統計信息
+    #[allow(dead_code)]
     pub fn get_debounce_stats(&self) -> &DebounceFilter {
         &self.debounce_filter
     }
@@ -333,4 +338,46 @@ pub enum JoypadKey {
     Left,
     Up,
     Down,
+}
+
+impl JoypadKey {
+    /// 獲取默認的鍵盤映射 (SDL Scancode -> JoypadKey)
+    #[allow(dead_code)]
+    pub fn get_default_keyboard_mapping()
+    -> std::collections::HashMap<sdl3::keyboard::Scancode, JoypadKey> {
+        let mut mapping = std::collections::HashMap::new();
+        use sdl3::keyboard::Scancode;
+
+        // 標準 Game Boy 控制映射
+        mapping.insert(Scancode::Up, JoypadKey::Up);
+        mapping.insert(Scancode::Down, JoypadKey::Down);
+        mapping.insert(Scancode::Left, JoypadKey::Left);
+        mapping.insert(Scancode::Right, JoypadKey::Right);
+        mapping.insert(Scancode::Z, JoypadKey::A);
+        mapping.insert(Scancode::X, JoypadKey::B);
+        mapping.insert(Scancode::Return, JoypadKey::Start);
+        mapping.insert(Scancode::RShift, JoypadKey::Select);
+
+        mapping
+    }
+
+    /// 獲取 Tetris 特定的鍵盤映射
+    pub fn get_tetris_keyboard_mapping()
+    -> std::collections::HashMap<sdl3::keyboard::Scancode, JoypadKey> {
+        let mut mapping = std::collections::HashMap::new();
+        use sdl3::keyboard::Scancode;
+
+        // Tetris 優化的控制映射
+        mapping.insert(Scancode::Up, JoypadKey::Up);
+        mapping.insert(Scancode::Down, JoypadKey::Down);
+        mapping.insert(Scancode::Left, JoypadKey::Left);
+        mapping.insert(Scancode::Right, JoypadKey::Right);
+        mapping.insert(Scancode::Z, JoypadKey::A); // Rotate
+        mapping.insert(Scancode::X, JoypadKey::B); // Soft drop
+        mapping.insert(Scancode::Return, JoypadKey::Start);
+        mapping.insert(Scancode::Space, JoypadKey::Start); // 額外的 Start 按鍵
+        mapping.insert(Scancode::RShift, JoypadKey::Select);
+
+        mapping
+    }
 }

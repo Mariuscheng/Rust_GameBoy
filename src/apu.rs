@@ -203,7 +203,7 @@ impl Apu {
             let step = self.frame_sequencer.current_step();
 
             // Length clocks on steps 0, 2, 4, 6 (even steps)
-            if step % 2 == 0 {
+            if step.is_multiple_of(2) {
                 self.clock_length();
             }
 

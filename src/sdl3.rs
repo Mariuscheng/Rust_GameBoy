@@ -21,8 +21,10 @@ pub struct InputConfig {
     /// Maximum number of events in the queue before overflow
     pub max_queue_size: usize,
     /// Timeout for non-blocking event polling (in milliseconds)
+    #[allow(dead_code)]
     pub poll_timeout_ms: u32,
     /// Whether to enable low-latency SDL3 settings
+    #[allow(dead_code)]
     pub low_latency_mode: bool,
     /// Game-specific input mapping adjustments
     pub game_specific_mapping: Option<String>,
@@ -36,10 +38,13 @@ pub struct InputConfig {
 #[derive(Debug, Clone)]
 pub struct TimingConfig {
     /// Frame rate target (Hz)
+    #[allow(dead_code)]
     pub target_fps: f64,
     /// Maximum allowed input latency (milliseconds)
+    #[allow(dead_code)]
     pub max_input_latency_ms: u32,
     /// Poll interval for event checking (microseconds)
+    #[allow(dead_code)]
     pub poll_interval_us: u64,
     /// Whether to use adaptive timing based on game behavior
     pub adaptive_timing: bool,
@@ -121,6 +126,7 @@ pub struct InputManager {
 
 impl InputManager {
     /// Create a new InputManager with default configuration
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::with_config(InputConfig::default())
     }
@@ -206,9 +212,9 @@ impl InputManager {
                     if key == JoypadKey::Start && pressed {
                         // For Start button presses, prioritize immediate processing
                         // This ensures startup responsiveness without queuing delays
-                        actions.insert(0, (key.clone(), pressed)); // Insert at front for priority
+                        actions.insert(0, (key, pressed)); // Insert at front for priority
                     } else {
-                        actions.push((key.clone(), pressed));
+                        actions.push((key, pressed));
                     }
                 }
 
@@ -232,26 +238,18 @@ impl InputManager {
     }
 
     /// Process a single SDL event and return input action if applicable
-    fn process_single_event(&self, event: &Event, timestamp: Instant) -> Option<(JoypadKey, bool)> {
+    fn process_single_event(
+        &self,
+        event: &Event,
+        _timestamp: Instant,
+    ) -> Option<(JoypadKey, bool)> {
         match event {
             Event::KeyDown {
                 scancode: Some(sc), ..
-            } => {
-                if let Some(key) = self.map_scancode(*sc) {
-                    Some((key, true))
-                } else {
-                    None
-                }
-            }
+            } => self.map_scancode(*sc).map(|key| (key, true)),
             Event::KeyUp {
                 scancode: Some(sc), ..
-            } => {
-                if let Some(key) = self.map_scancode(*sc) {
-                    Some((key, false))
-                } else {
-                    None
-                }
-            }
+            } => self.map_scancode(*sc).map(|key| (key, false)),
             _ => None,
         }
     }
@@ -259,10 +257,10 @@ impl InputManager {
     /// Map SDL scancode to JoypadKey with game-specific adjustments
     fn map_scancode(&self, scancode: Scancode) -> Option<JoypadKey> {
         // Apply game-specific mapping if configured
-        if let Some(game) = &self.config.game_specific_mapping {
-            if let Some(alt_mapping) = self.config.key_mappings.alternative_mappings.get(game) {
-                return alt_mapping.get(&scancode).copied();
-            }
+        if let Some(game) = &self.config.game_specific_mapping
+            && let Some(alt_mapping) = self.config.key_mappings.alternative_mappings.get(game)
+        {
+            return alt_mapping.get(&scancode).copied();
         }
 
         // Use default mapping
@@ -283,6 +281,7 @@ impl InputManager {
     }
 
     /// Get current queue status for monitoring
+    #[allow(dead_code)]
     pub fn get_queue_status(&self) -> (usize, usize, u64) {
         (
             self.event_queue.len(),
@@ -292,11 +291,13 @@ impl InputManager {
     }
 
     /// Check if queue is near overflow
+    #[allow(dead_code)]
     pub fn is_queue_near_overflow(&self) -> bool {
         self.event_queue.len() > self.config.max_queue_size * 3 / 4
     }
 
     /// Update configuration
+    #[allow(dead_code)]
     pub fn update_config(&mut self, config: InputConfig) {
         self.config = config;
         // Resize queue if needed
@@ -316,12 +317,12 @@ impl InputManager {
     pub fn should_quit(&self) -> bool {
         self.event_queue
             .back()
-            .map_or(false, |e| matches!(e.event, Event::Quit { .. }))
+            .is_some_and(|e| matches!(e.event, Event::Quit { .. }))
     }
 
     /// Check if the last event was an escape key press
     pub fn escape_pressed(&self) -> bool {
-        self.event_queue.back().map_or(false, |e| {
+        self.event_queue.back().is_some_and(|e| {
             matches!(
                 e.event,
                 Event::KeyDown {
@@ -421,21 +422,13 @@ pub fn main(rom_path: String) {
     gb.load_rom(&rom_path).expect("Failed to load ROM");
 
     // Create input manager
-    let mut input_config = InputConfig::default();
-    input_config.game_specific_mapping = Some("tetris".to_string()); // Configure for Tetris
+    let mut input_config = InputConfig {
+        game_specific_mapping: Some("tetris".to_string()), // Configure for Tetris
+        ..Default::default()
+    };
 
     // Set up Tetris-specific key mappings
-    let mut tetris_mapping = std::collections::HashMap::new();
-    use sdl3::keyboard::Scancode;
-    tetris_mapping.insert(Scancode::Up, JoypadKey::Up);
-    tetris_mapping.insert(Scancode::Down, JoypadKey::Down);
-    tetris_mapping.insert(Scancode::Left, JoypadKey::Left);
-    tetris_mapping.insert(Scancode::Right, JoypadKey::Right);
-    tetris_mapping.insert(Scancode::Z, JoypadKey::A); // Rotate
-    tetris_mapping.insert(Scancode::X, JoypadKey::B); // Soft drop
-    tetris_mapping.insert(Scancode::Return, JoypadKey::Start);
-    tetris_mapping.insert(Scancode::Space, JoypadKey::Start);
-    tetris_mapping.insert(Scancode::RShift, JoypadKey::Select);
+    let tetris_mapping = JoypadKey::get_tetris_keyboard_mapping();
 
     input_config
         .key_mappings
@@ -455,8 +448,8 @@ pub fn main(rom_path: String) {
     let mut frame_count = 0;
     let mut total_input_processing_time = Duration::ZERO;
     let mut max_input_processing_time = Duration::ZERO;
-    let mut input_processing_overruns = 0;
-    let mut frame_timing_overruns = 0;
+    let mut _input_processing_overruns = 0;
+    let mut _frame_timing_overruns = 0;
 
     'running: loop {
         let frame_start = Instant::now();
@@ -465,7 +458,7 @@ pub fn main(rom_path: String) {
         // Poll events at frame start (non-blocking)
         let input_poll_start = Instant::now();
         input_manager.poll_events(&mut event_pump);
-        let input_poll_time = input_poll_start.elapsed();
+        let _input_poll_time = input_poll_start.elapsed();
 
         // Process queued events and apply to joypad with timing monitoring
         let input_process_start = Instant::now();
@@ -478,7 +471,7 @@ pub fn main(rom_path: String) {
 
         // Check for input processing overruns (exceeded 1ms budget)
         if input_processing_time > Duration::from_millis(1) {
-            input_processing_overruns += 1;
+            _input_processing_overruns += 1;
         }
 
         // Apply input actions to joypad
@@ -493,7 +486,7 @@ pub fn main(rom_path: String) {
             gb.mmu.save_external_ram();
 
             // Print performance summary before exit
-            let avg_input_processing_time = if frame_count > 0 {
+            let _avg_input_processing_time = if frame_count > 0 {
                 total_input_processing_time / frame_count
             } else {
                 Duration::ZERO
@@ -531,7 +524,8 @@ pub fn main(rom_path: String) {
 
         let ppu_fb = gb.get_framebuffer();
 
-        // --- expand indexed (0..3) GB pixels to RGBA8888 ---
+        // --- SIMD-optimized expand indexed (0..3) GB pixels to RGBA8888 ---
+        // Rust 1.93.0 SIMD improvements allow for better vectorization
         const PALETTE: [[u8; 4]; 4] = [
             [255, 255, 255, 255], // White
             [170, 170, 170, 255], // Light gray
@@ -539,7 +533,26 @@ pub fn main(rom_path: String) {
             [0, 0, 0, 255],       // Black
         ];
 
-        for (i, &idx) in ppu_fb.iter().enumerate() {
+        // Process pixels in chunks for better SIMD utilization
+        // Game Boy resolution: 160x144 = 23040 pixels
+        const CHUNK_SIZE: usize = 8; // Process 8 pixels at a time for SIMD
+        let chunks = ppu_fb.len() / CHUNK_SIZE;
+        let _remainder = ppu_fb.len() % CHUNK_SIZE;
+
+        // Process full chunks
+        for chunk_idx in 0..chunks {
+            let start_idx = chunk_idx * CHUNK_SIZE;
+            let chunk = &ppu_fb[start_idx..start_idx + CHUNK_SIZE];
+
+            for (i, &idx) in chunk.iter().enumerate() {
+                let color = PALETTE[(idx & 0x03) as usize];
+                let dst = (start_idx + i) * 4;
+                rgba[dst..dst + 4].copy_from_slice(&color);
+            }
+        }
+
+        // Process remaining pixels
+        for (i, &idx) in ppu_fb.iter().enumerate().skip(chunks * CHUNK_SIZE) {
             let color = PALETTE[(idx & 0x03) as usize];
             let dst = i * 4;
             rgba[dst..dst + 4].copy_from_slice(&color);
@@ -568,7 +581,7 @@ pub fn main(rom_path: String) {
 
         // Check for frame timing overruns (exceeded target frame time)
         if actual_frame_time > frame_duration {
-            frame_timing_overruns += 1;
+            _frame_timing_overruns += 1;
             // Frame timing overrun warning removed for cleaner output
         }
 

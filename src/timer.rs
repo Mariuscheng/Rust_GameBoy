@@ -47,7 +47,7 @@ impl Timer {
     }
 
     // 增加 TIMA
-    fn increment_tima(&mut self, interrupt_flags: &mut u8) {
+    fn increment_tima(&mut self, _interrupt_flags: &mut u8) {
         let (new_tima, overflow) = self.tima.overflowing_add(1);
         if overflow {
             // TIMA 溢出，設置為 0x00 並標記待處理
