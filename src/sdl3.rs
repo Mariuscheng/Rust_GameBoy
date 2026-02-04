@@ -75,21 +75,8 @@ impl Default for TimingConfig {
 
 impl Default for KeyMappings {
     fn default() -> Self {
-        let mut scancode_to_key = std::collections::HashMap::new();
-
-        // Default GameBoy key mappings (matching original hardcoded mapping)
-        scancode_to_key.insert(sdl3::keyboard::Scancode::Up, JoypadKey::Up);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::Down, JoypadKey::Down);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::Left, JoypadKey::Left);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::Right, JoypadKey::Right);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::Z, JoypadKey::A);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::X, JoypadKey::B);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::Return, JoypadKey::Start);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::Space, JoypadKey::Start);
-        scancode_to_key.insert(sdl3::keyboard::Scancode::RShift, JoypadKey::Select);
-
         Self {
-            scancode_to_key,
+            scancode_to_key: JoypadKey::get_keyboard_mapping(),
             alternative_mappings: std::collections::HashMap::new(),
         }
     }
@@ -428,7 +415,7 @@ pub fn main(rom_path: String) {
     };
 
     // Set up Tetris-specific key mappings
-    let tetris_mapping = JoypadKey::get_tetris_keyboard_mapping();
+    let tetris_mapping = JoypadKey::get_keyboard_mapping();
 
     input_config
         .key_mappings

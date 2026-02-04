@@ -151,6 +151,15 @@ impl Joypad {
         self.interrupt_handler = Some(handler);
     }
 
+    /// 輔助函數：更新位元狀態
+    fn update_key_bit(target: &mut u8, mask: u8, pressed: bool) {
+        if pressed {
+            *target &= !mask;
+        } else {
+            *target |= mask;
+        }
+    }
+
     pub fn read_register(&self) -> u8 {
         // 高位元(6-7)讀取時通常為 1，位元 4-5 是 select bits
         let upper = 0xC0 | self.select;
@@ -180,7 +189,7 @@ impl Joypad {
     // 按下時 bit 設為 0，放開時設為 1，返回是否觸發中斷
     pub fn set_key(&mut self, key: JoypadKey, pressed: bool) -> bool {
         let now = Instant::now();
-        let key_index = self.key_to_index(key);
+        let key_index = key.as_index();
 
         // 應用去抖動過濾
         if !self.should_process_key_change(key_index, pressed, now) {
@@ -211,62 +220,14 @@ impl Joypad {
 
         // 更新舊的位元狀態以保持兼容性
         match key {
-            JoypadKey::A => {
-                if pressed {
-                    self.action_keys &= !0x01
-                } else {
-                    self.action_keys |= 0x01
-                }
-            }
-            JoypadKey::B => {
-                if pressed {
-                    self.action_keys &= !0x02
-                } else {
-                    self.action_keys |= 0x02
-                }
-            }
-            JoypadKey::Select => {
-                if pressed {
-                    self.action_keys &= !0x04
-                } else {
-                    self.action_keys |= 0x04
-                }
-            }
-            JoypadKey::Start => {
-                if pressed {
-                    self.action_keys &= !0x08
-                } else {
-                    self.action_keys |= 0x08
-                }
-            }
-            JoypadKey::Right => {
-                if pressed {
-                    self.direction_keys &= !0x01
-                } else {
-                    self.direction_keys |= 0x01
-                }
-            }
-            JoypadKey::Left => {
-                if pressed {
-                    self.direction_keys &= !0x02
-                } else {
-                    self.direction_keys |= 0x02
-                }
-            }
-            JoypadKey::Up => {
-                if pressed {
-                    self.direction_keys &= !0x04
-                } else {
-                    self.direction_keys |= 0x04
-                }
-            }
-            JoypadKey::Down => {
-                if pressed {
-                    self.direction_keys &= !0x08
-                } else {
-                    self.direction_keys |= 0x08
-                }
-            }
+            JoypadKey::A => Self::update_key_bit(&mut self.action_keys, 0x01, pressed),
+            JoypadKey::B => Self::update_key_bit(&mut self.action_keys, 0x02, pressed),
+            JoypadKey::Select => Self::update_key_bit(&mut self.action_keys, 0x04, pressed),
+            JoypadKey::Start => Self::update_key_bit(&mut self.action_keys, 0x08, pressed),
+            JoypadKey::Right => Self::update_key_bit(&mut self.direction_keys, 0x01, pressed),
+            JoypadKey::Left => Self::update_key_bit(&mut self.direction_keys, 0x02, pressed),
+            JoypadKey::Up => Self::update_key_bit(&mut self.direction_keys, 0x04, pressed),
+            JoypadKey::Down => Self::update_key_bit(&mut self.direction_keys, 0x08, pressed),
         }
 
         let new_res = self.read_register();
@@ -280,20 +241,6 @@ impl Joypad {
         }
 
         should_trigger_interrupt
-    }
-
-    /// 將JoypadKey轉換為數組索引
-    pub fn key_to_index(&self, key: JoypadKey) -> usize {
-        match key {
-            JoypadKey::A => 0,
-            JoypadKey::B => 1,
-            JoypadKey::Select => 2,
-            JoypadKey::Start => 3,
-            JoypadKey::Right => 4,
-            JoypadKey::Left => 5,
-            JoypadKey::Up => 6,
-            JoypadKey::Down => 7,
-        }
     }
 
     /// 檢查是否應該處理按鍵變化（去抖動過濾）
@@ -318,7 +265,7 @@ impl Joypad {
     /// 獲取按鍵狀態統計信息
     #[allow(dead_code)]
     pub fn get_key_stats(&self, key: JoypadKey) -> &KeyState {
-        &self.key_states[self.key_to_index(key)]
+        &self.key_states[key.as_index()]
     }
 
     /// 獲取去抖動統計信息
@@ -341,42 +288,38 @@ pub enum JoypadKey {
 }
 
 impl JoypadKey {
-    /// 獲取默認的鍵盤映射 (SDL Scancode -> JoypadKey)
-    #[allow(dead_code)]
-    pub fn get_default_keyboard_mapping()
-    -> std::collections::HashMap<sdl3::keyboard::Scancode, JoypadKey> {
-        let mut mapping = std::collections::HashMap::new();
-        use sdl3::keyboard::Scancode;
-
-        // 標準 Game Boy 控制映射
-        mapping.insert(Scancode::Up, JoypadKey::Up);
-        mapping.insert(Scancode::Down, JoypadKey::Down);
-        mapping.insert(Scancode::Left, JoypadKey::Left);
-        mapping.insert(Scancode::Right, JoypadKey::Right);
-        mapping.insert(Scancode::Z, JoypadKey::A);
-        mapping.insert(Scancode::X, JoypadKey::B);
-        mapping.insert(Scancode::Return, JoypadKey::Start);
-        mapping.insert(Scancode::RShift, JoypadKey::Select);
-
-        mapping
+    /// 將 JoypadKey 轉換為數組索引
+    pub fn as_index(self) -> usize {
+        match self {
+            JoypadKey::A => 0,
+            JoypadKey::B => 1,
+            JoypadKey::Select => 2,
+            JoypadKey::Start => 3,
+            JoypadKey::Right => 4,
+            JoypadKey::Left => 5,
+            JoypadKey::Up => 6,
+            JoypadKey::Down => 7,
+        }
     }
 
-    /// 獲取 Tetris 特定的鍵盤映射
-    pub fn get_tetris_keyboard_mapping()
-    -> std::collections::HashMap<sdl3::keyboard::Scancode, JoypadKey> {
+    /// 獲取鍵盤映射
+    pub fn get_keyboard_mapping() -> std::collections::HashMap<sdl3::keyboard::Scancode, JoypadKey>
+    {
         let mut mapping = std::collections::HashMap::new();
         use sdl3::keyboard::Scancode;
 
-        // Tetris 優化的控制映射
+        // 基礎映射 - 適用於所有遊戲
         mapping.insert(Scancode::Up, JoypadKey::Up);
         mapping.insert(Scancode::Down, JoypadKey::Down);
         mapping.insert(Scancode::Left, JoypadKey::Left);
         mapping.insert(Scancode::Right, JoypadKey::Right);
-        mapping.insert(Scancode::Z, JoypadKey::A); // Rotate
-        mapping.insert(Scancode::X, JoypadKey::B); // Soft drop
         mapping.insert(Scancode::Return, JoypadKey::Start);
-        mapping.insert(Scancode::Space, JoypadKey::Start); // 額外的 Start 按鍵
         mapping.insert(Scancode::RShift, JoypadKey::Select);
+
+        // 統一映射 - 包含 Z, X, 和 Space
+        mapping.insert(Scancode::Z, JoypadKey::A);
+        mapping.insert(Scancode::X, JoypadKey::B);
+        mapping.insert(Scancode::Space, JoypadKey::Start); // 額外的 Start 按鍵
 
         mapping
     }
