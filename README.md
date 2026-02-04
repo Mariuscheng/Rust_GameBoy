@@ -9,9 +9,9 @@
 | Wario Land 3 | ✅ |
 | Hyper Lode Runner | ✅ |
 | Gremlins 2 | ✅ |
-| Dr.Mario | ❌ |
-| Tetris | ❌ |
-| PC指令錯誤（bug) | ❌ |
+| Dr.Mario | ✅ |
+| Tetris | ✅ |
+| 調整APU | ❌ |
 
 ## 測試結果
 
@@ -142,6 +142,7 @@ cargo run --release -- <your_game>.gb
 - 通過更多測試 ROM
 
 - 支援更多 MBC 類型
+
 
 
 
