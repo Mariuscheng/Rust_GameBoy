@@ -12,6 +12,7 @@
 | Dr.Mario | ✅ |
 | Tetris | ✅ |
 | 調整APU | ❌ |
+| 調整PPU(有遊戲畫面頂部閃爍) | ❌ |
 
 ## 測試結果
 
@@ -142,6 +143,7 @@ cargo run --release -- <your_game>.gb
 - 通過更多測試 ROM
 
 - 支援更多 MBC 類型
+
 
 
 
