@@ -1,6 +1,6 @@
 // Joypad (按鍵輸入) - 處理玩家輸入
 
-use crate::gameboy::{InterruptHandler, InterruptType};
+use crate::gameboy::InterruptHandler;
 use std::time::{Duration, Instant};
 
 pub struct Joypad {
@@ -196,10 +196,11 @@ impl Joypad {
 
         let new_res = self.read_register();
 
-        // 如果任何位元從 1 變為 0 (Falling Edge) 且有中斷處理器，觸發優化的 Joypad 中斷
+        // 如果任何位元從 1 變為 0 (Falling Edge)，觸發 Joypad 中斷
         let should_trigger_interrupt = (old_res & !new_res & 0x0F) != 0;
         if should_trigger_interrupt && let Some(handler_ptr) = self.interrupt_handler {
             unsafe {
+                use crate::gameboy::InterruptType;
                 (*handler_ptr).trigger_interrupt(InterruptType::Joypad);
             }
         }
@@ -226,17 +227,7 @@ impl Joypad {
         true
     }
 
-    /// 獲取按鍵狀態統計信息
-    #[allow(dead_code)]
-    pub fn get_key_stats(&self, key: JoypadKey) -> &KeyState {
-        &self.key_states[key.as_index()]
-    }
 
-    /// 獲取去抖動統計信息
-    #[allow(dead_code)]
-    pub fn get_debounce_stats(&self) -> &DebounceFilter {
-        &self.debounce_filter
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]

@@ -2,6 +2,7 @@
 // 整合操作碼資料和記憶體映射
 
 use crate::cpu; // 引用 cpu 模組
+use crate::ppu::{LcdMode, Ppu};
 use crate::rom; // 引用 rom 模組
 
 #[allow(dead_code)]
@@ -45,6 +46,9 @@ pub struct Mmu {
     pub banking_mode: u8, // 0 = ROM banking, 1 = RAM banking
 
     io_handler: Option<Box<dyn IoHandler>>,
+
+    // 供 CPU-side VRAM/OAM 存取限制使用（PPU 內部讀取不受限）
+    ppu: Option<*const Ppu>,
 }
 
 impl Mmu {
@@ -57,7 +61,7 @@ impl Mmu {
             oam: vec![0; 0xA0],    // 160 位元組 OAM
             hram: [0; 127],
             ie: 0,
-            if_reg: 0xE1, // GameBoy 初始值通常低 3 位為 1
+            if_reg: 0xE0,
             serial_data: 0,
             serial_control: 0x7E, // SC 預設值
             serial_output: String::new(),
@@ -69,12 +73,17 @@ impl Mmu {
             banking_mode: 0,
 
             io_handler: None,
+            ppu: None,
         }
     }
 
     // 設置 I/O 處理器
     pub fn set_io_handler(&mut self, handler: Box<dyn IoHandler>) {
         self.io_handler = Some(handler);
+    }
+
+    pub fn set_ppu(&mut self, ppu: &Ppu) {
+        self.ppu = Some(std::ptr::from_ref(ppu));
     }
 
     // 獲取操作碼引用 (現在改為引用全域靜態變數)
@@ -108,7 +117,8 @@ impl Memory for Mmu {
 }
 
 impl Mmu {
-    pub fn read_byte(&self, address: u16) -> u8 {
+    // 給 PPU/DMA 內部使用：不受 CPU-side VRAM/OAM 存取限制影響
+    pub fn read_byte_ppu(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x3FFF => self.rom[address as usize], // ROM Bank 0
             0x4000..=0x7FFF => {
@@ -150,7 +160,63 @@ impl Mmu {
         }
     }
 
+    pub fn read_byte(&self, address: u16) -> u8 {
+        // CPU-side VRAM/OAM 存取限制：
+        // - Mode 3 (PixelTransfer) 時，CPU 不能存取 VRAM
+        // - Mode 2/3 時，CPU 不能存取 OAM
+        if let Some(ppu_ptr) = self.ppu {
+            unsafe {
+                let lcd_enabled = ((*ppu_ptr).lcdc & 0x80) != 0;
+                if lcd_enabled {
+                    match address {
+                        0x8000..=0x9FFF => {
+                            if (*ppu_ptr).mode == LcdMode::PixelTransfer {
+                                return 0xFF;
+                            }
+                        }
+                        0xFE00..=0xFE9F => {
+                            if matches!(
+                                (*ppu_ptr).mode,
+                                LcdMode::OamSearch | LcdMode::PixelTransfer
+                            ) {
+                                return 0xFF;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        self.read_byte_ppu(address)
+    }
+
     pub fn write_byte(&mut self, address: u16, value: u8) {
+        // CPU-side VRAM/OAM 存取限制（同 read_byte 的規則）
+        if let Some(ppu_ptr) = self.ppu {
+            unsafe {
+                let lcd_enabled = ((*ppu_ptr).lcdc & 0x80) != 0;
+                if lcd_enabled {
+                    match address {
+                        0x8000..=0x9FFF => {
+                            if (*ppu_ptr).mode == LcdMode::PixelTransfer {
+                                return;
+                            }
+                        }
+                        0xFE00..=0xFE9F => {
+                            if matches!(
+                                (*ppu_ptr).mode,
+                                LcdMode::OamSearch | LcdMode::PixelTransfer
+                            ) {
+                                return;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         match address {
             0x0000..=0x1FFF => {
                 // MBC1: RAM Enable
@@ -321,7 +387,7 @@ impl Mmu {
     fn perform_dma(&mut self, value: u8) {
         let source_base = (value as u16) << 8;
         for i in 0..0xA0 {
-            let byte = self.read_byte(source_base + i);
+            let byte = self.read_byte_ppu(source_base + i);
             self.oam[i as usize] = byte;
         }
     }

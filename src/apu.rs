@@ -21,11 +21,16 @@ pub struct Apu {
 
     // 音訊緩衝區
     pub audio_buffer: VecDeque<f32>,
-    sample_clock: f32,
+    sample_counter: u32,
 }
 
-// CPU 頻率 / 採樣率 = 4194304 / 44100 ≈ 95.1
-const SAMPLE_RATE_DIVISOR: f32 = 4194304.0 / 44100.0;
+// 使用整數算術避免浮點數漂移
+// CPU 頻率 4194304 Hz，樣本率 44100 Hz
+// 每 95.0996 個週期一個樣本
+// 使用 4194304 / 44100 = 95 + 1/11.666...
+// 我們使用兩個計數器來實現精確的定時
+const SAMPLE_NUMERATOR: u32 = 4194304;
+const SAMPLE_DENOMINATOR: u32 = 44100;
 
 impl Apu {
     pub fn new() -> Self {
@@ -39,7 +44,7 @@ impl Apu {
             nr52: 0,
             frame_sequencer: FrameSequencer::new(),
             audio_buffer: VecDeque::with_capacity(8192),
-            sample_clock: 0.0,
+            sample_counter: 0,
         }
     }
 
@@ -180,6 +185,7 @@ impl Apu {
         self.noise.power_off();
         self.nr50 = 0;
         self.nr51 = 0;
+        self.sample_counter = 0; // 重置樣本計數器
     }
 
     // 更新 APU 狀態 (每 T-cycle 調用)
@@ -224,12 +230,11 @@ impl Apu {
         self.wave.tick();
         self.noise.tick();
 
-        // 採樣（降低採樣頻率以提高效能）
-        self.sample_clock += 1.0;
-        // CPU 頻率 4194304Hz，採樣率 44100Hz
-        // 使用精確的浮點數計算避免漂移
-        if self.sample_clock >= SAMPLE_RATE_DIVISOR {
-            self.sample_clock -= SAMPLE_RATE_DIVISOR;
+        // 採樣 - 使用整數算術避免漂移
+        // CPU 頻率 4194304Hz，樣本率 44100Hz
+        self.sample_counter += SAMPLE_DENOMINATOR;
+        if self.sample_counter >= SAMPLE_NUMERATOR {
+            self.sample_counter -= SAMPLE_NUMERATOR;
             self.output_sample();
         }
     }
@@ -248,11 +253,6 @@ impl Apu {
     }
 
     fn output_sample(&mut self) {
-        // 只在需要輸出樣本時才做混音計算
-        if self.audio_buffer.len() >= 8192 {
-            return; // 緩衝區滿了，跳過
-        }
-
         let (left, right) = self.mix_channels();
         // 混合左右聲道為單聲道（與 SDL 設定匹配）
         let mono = (left + right) * 0.5;

@@ -59,59 +59,19 @@ impl std::error::Error for EmulatorError {}
 /// Configuration for input processing
 #[derive(Debug, Clone)]
 pub struct InputConfig {
-    /// Maximum number of events in the queue before overflow
     pub max_queue_size: usize,
-    /// Timeout for non-blocking event polling (in milliseconds)
-    #[allow(dead_code)]
-    pub poll_timeout_ms: u32,
-    /// Whether to enable low-latency SDL3 settings
-    #[allow(dead_code)]
-    pub low_latency_mode: bool,
-    /// Game-specific input mapping adjustments
     pub game_specific_mapping: Option<String>,
-    /// Configurable timing parameters for different games
-    pub timing_config: TimingConfig,
-    /// Custom key mappings for different input schemes
     pub key_mappings: KeyMappings,
 }
 
-/// Timing configuration for different game requirements
-#[derive(Debug, Clone)]
-pub struct TimingConfig {
-    /// Frame rate target (Hz)
-    #[allow(dead_code)]
-    pub target_fps: f64,
-    /// Maximum allowed input latency (milliseconds)
-    #[allow(dead_code)]
-    pub max_input_latency_ms: u32,
-    /// Poll interval for event checking (microseconds)
-    #[allow(dead_code)]
-    pub poll_interval_us: u64,
-    /// Whether to use adaptive timing based on game behavior
-    pub adaptive_timing: bool,
-}
-
-/// Custom key mappings for different input schemes
+/// Custom key mappings
 #[derive(Debug, Clone)]
 pub struct KeyMappings {
-    /// Mapping from SDL scancodes to GameBoy keys
     pub scancode_to_key: std::collections::HashMap<sdl3::keyboard::Scancode, JoypadKey>,
-    /// Alternative key mappings for different layouts
     pub alternative_mappings: std::collections::HashMap<
         String,
         std::collections::HashMap<sdl3::keyboard::Scancode, JoypadKey>,
     >,
-}
-
-impl Default for TimingConfig {
-    fn default() -> Self {
-        Self {
-            target_fps: 59.7275,      // GameBoy frame rate
-            max_input_latency_ms: 16, // One frame at 60 FPS
-            poll_interval_us: 1000,   // 1ms poll interval
-            adaptive_timing: true,
-        }
-    }
 }
 
 impl Default for KeyMappings {
@@ -127,10 +87,7 @@ impl Default for InputConfig {
     fn default() -> Self {
         Self {
             max_queue_size: 1000,
-            poll_timeout_ms: 1, // 1ms timeout for non-blocking
-            low_latency_mode: true,
             game_specific_mapping: None,
-            timing_config: TimingConfig::default(),
             key_mappings: KeyMappings::default(),
         }
     }
@@ -153,13 +110,6 @@ pub struct InputManager {
 }
 
 impl InputManager {
-    /// Create a new InputManager with default configuration
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self::with_config(InputConfig::default())
-    }
-
-    /// Create a new InputManager with custom configuration
     pub fn with_config(config: InputConfig) -> Self {
         Self {
             event_queue: VecDeque::with_capacity(config.max_queue_size),
@@ -299,48 +249,6 @@ impl InputManager {
             .copied()
     }
 
-    /// Apply timing configuration to SDL3 (called during initialization)
-    pub fn apply_timing_config(&self) {
-        // Note: SDL3 timing hints are set during initialization
-        // This method could be extended to dynamically adjust timing if needed
-        if self.config.timing_config.adaptive_timing {
-            // Adaptive timing is enabled - could implement dynamic poll interval adjustment
-        }
-    }
-
-    /// Get current queue status for monitoring
-    #[allow(dead_code)]
-    pub fn get_queue_status(&self) -> (usize, usize, u64) {
-        (
-            self.event_queue.len(),
-            self.config.max_queue_size,
-            self.overflow_count,
-        )
-    }
-
-    /// Check if queue is near overflow
-    #[allow(dead_code)]
-    pub fn is_queue_near_overflow(&self) -> bool {
-        self.event_queue.len() > self.config.max_queue_size * 3 / 4
-    }
-
-    /// Update configuration
-    #[allow(dead_code)]
-    pub fn update_config(&mut self, config: InputConfig) {
-        self.config = config;
-        // Resize queue if needed
-        if self.event_queue.capacity() < self.config.max_queue_size {
-            let mut new_queue = VecDeque::with_capacity(self.config.max_queue_size);
-            // Move events to new queue
-            while let Some(event) = self.event_queue.pop_front() {
-                if new_queue.len() < self.config.max_queue_size {
-                    new_queue.push_back(event);
-                }
-            }
-            self.event_queue = new_queue;
-        }
-    }
-
     /// Check if the last event was a quit event
     pub fn should_quit(&self) -> bool {
         self.event_queue
@@ -365,27 +273,10 @@ impl InputManager {
 use crossbeam::channel::Receiver;
 use sdl3::audio::{AudioCallback, AudioFormat, AudioSpec, AudioStream};
 
-/// Configure SDL3 for low-latency input processing
+/// Configure SDL3 for stable rendering
 fn configure_sdl3_low_latency() {
-    // Enable VSync to prevent screen tearing
-    sdl3::hint::set("SDL_RENDER_VSYNC", "1");
-
-    // Configure low-latency input settings
-    sdl3::hint::set("SDL_HINT_JOYSTICK_THREAD", "1"); // Use threaded joystick input
-    sdl3::hint::set("SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS", "0"); // Disable button labels for faster processing
-    sdl3::hint::set("SDL_HINT_MOUSE_RELATIVE_MODE_WARP", "0"); // Disable mouse warping
-    sdl3::hint::set("SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0"); // Don't minimize on focus loss
-
-    // Set timer resolution for more precise timing
-    sdl3::hint::set("SDL_HINT_TIMER_RESOLUTION", "1"); // 1ms timer resolution
-
-    // Configure event processing for low latency
-    sdl3::hint::set("SDL_HINT_EVENT_LOGGING", "0"); // Disable event logging for performance
-    sdl3::hint::set("SDL_HINT_WINDOWS_DISABLE_THREAD_NAMING", "1"); // Disable thread naming on Windows
-
-    // Android-specific low latency settings (if applicable)
-    sdl3::hint::set("SDL_HINT_ANDROID_BLOCK_ON_PAUSE", "0");
-    sdl3::hint::set("SDL_HINT_ANDROID_TRAP_BACK_BUTTON", "0");
+    sdl3::hint::set("SDL_RENDER_VSYNC", "1"); // Enable VSync
+    sdl3::hint::set("SDL_HINT_RENDER_SCALE_QUALITY", "0");
 }
 
 struct GbAudio {
@@ -435,6 +326,10 @@ pub fn main(rom_path: String) {
         .expect("視窗創建失敗");
 
     let mut canvas = window.into_canvas();
+    canvas.set_draw_color(sdl3::pixels::Color::RGB(0, 0, 0));
+    canvas.clear();
+    canvas.present();
+
     let texture_creator = canvas.texture_creator();
     let mut stream_tex = texture_creator
         .create_texture_streaming(PixelFormat::ABGR8888, 160, 144)
@@ -464,134 +359,55 @@ pub fn main(rom_path: String) {
         .insert("tetris".to_string(), tetris_mapping);
 
     let mut input_manager = InputManager::with_config(input_config);
-    input_manager.apply_timing_config(); // Apply timing configuration
 
     let mut event_pump = sdl_context.event_pump().expect("事件泵初始化失敗");
 
-    // Game Boy 精確幀率: 59.7275 FPS
-    let frame_duration = Duration::from_nanos(16_742_706);
-    let half_frame_duration = frame_duration / 2; // 8.37ms for mid-frame polling
-
-    // Performance monitoring for non-blocking game loop
-    let mut frame_count = 0;
-    let mut total_input_processing_time = Duration::ZERO;
-    let mut max_input_processing_time = Duration::ZERO;
-    let mut _input_processing_overruns = 0;
-    let mut _frame_timing_overruns = 0;
+    let frame_duration = Duration::from_micros(16743); // 59.7275 FPS = 16.743ms
+    let mut next_frame = Instant::now();
 
     loop {
-        let frame_start = Instant::now();
-        frame_count += 1;
-
-        // Poll events at frame start (non-blocking)
-        let input_poll_start = Instant::now();
+        // Poll events
         input_manager.poll_events(&mut event_pump);
-        let _input_poll_time = input_poll_start.elapsed();
-
-        // Process queued events and apply to joypad with timing monitoring
-        let input_process_start = Instant::now();
         let input_actions = input_manager.process_events();
-        let input_processing_time = input_process_start.elapsed();
 
-        // Update performance monitoring
-        total_input_processing_time += input_processing_time;
-        max_input_processing_time = max_input_processing_time.max(input_processing_time);
-
-        // Check for input processing overruns (exceeded 1ms budget)
-        if input_processing_time > Duration::from_millis(1) {
-            _input_processing_overruns += 1;
-        }
-
-        // Apply input actions to joypad
         for (key, pressed) in input_actions {
             if gb.joypad.set_key(key, pressed) && pressed {
-                gb.mmu.if_reg |= 0x10; // Joypad interrupt
+                gb.mmu.if_reg |= 0x10;
             }
         }
 
-        // Check for quit event (simplified - InputManager handles most events)
         if input_manager.should_quit() || input_manager.escape_pressed() {
             gb.mmu.save_external_ram();
-
-            // Print performance summary before exit
-            let _avg_input_processing_time = if frame_count > 0 {
-                total_input_processing_time / frame_count
-            } else {
-                Duration::ZERO
-            };
-
-            // Performance summary removed for cleaner output
-
             return;
         }
 
-        // Run first half of frame
-        gb.run_cycles(35112); // Half of 70224 cycles
+        // Run emulation (sync to VBlank so we always present whole frames)
+        gb.run_frame();
 
-        // Mid-frame input polling for reduced latency (8.37ms intervals)
-        let mid_frame_time = frame_start.elapsed();
-        if mid_frame_time >= half_frame_duration {
-            // Poll events mid-frame if we're running behind schedule
-            input_manager.poll_events(&mut event_pump);
-            let mid_frame_actions = input_manager.process_events();
-            for (key, pressed) in mid_frame_actions {
-                if gb.joypad.set_key(key, pressed) && pressed {
-                    gb.mmu.if_reg |= 0x10; // Joypad interrupt
-                }
-            }
-        }
-
-        // Run second half of frame
-        gb.run_cycles(35112); // Remaining cycles
-
-        // 獲取音訊樣本
+        // Audio
         let samples = gb.apu.drain_samples();
         for s in samples {
             let _ = tx.try_send(s);
         }
 
-        let ppu_fb = gb.get_framebuffer();
-
-        // --- SIMD-optimized expand indexed (0..3) GB pixels to RGBA8888 ---
-        // Rust 1.93.0 SIMD improvements allow for better vectorization
+        // Render
+        let ppu_fb = gb.get_present_framebuffer();
         const PALETTE: [[u8; 4]; 4] = [
-            [255, 255, 255, 255], // White
-            [170, 170, 170, 255], // Light gray
-            [85, 85, 85, 255],    // Dark gray
-            [0, 0, 0, 255],       // Black
+            [255, 255, 255, 255],
+            [170, 170, 170, 255],
+            [85, 85, 85, 255],
+            [0, 0, 0, 255],
         ];
 
-        // Process pixels in chunks for better SIMD utilization
-        // Game Boy resolution: 160x144 = 23040 pixels
-        const CHUNK_SIZE: usize = 8; // Process 8 pixels at a time for SIMD
-        let chunks = ppu_fb.len() / CHUNK_SIZE;
-        let _remainder = ppu_fb.len() % CHUNK_SIZE;
-
-        // Process full chunks
-        for chunk_idx in 0..chunks {
-            let start_idx = chunk_idx * CHUNK_SIZE;
-            let chunk = &ppu_fb[start_idx..start_idx + CHUNK_SIZE];
-
-            for (i, &idx) in chunk.iter().enumerate() {
-                let color = PALETTE[(idx & 0x03) as usize];
-                let dst = (start_idx + i) * 4;
-                rgba[dst..dst + 4].copy_from_slice(&color);
-            }
-        }
-
-        // Process remaining pixels
-        for (i, &idx) in ppu_fb.iter().enumerate().skip(chunks * CHUNK_SIZE) {
+        for (i, &idx) in ppu_fb.iter().enumerate() {
             let color = PALETTE[(idx & 0x03) as usize];
             let dst = i * 4;
             rgba[dst..dst + 4].copy_from_slice(&color);
         }
 
-        // --- upload to streaming texture and draw ---
-        if let Err(e) = stream_tex.update(None, &rgba, (W * 4) as usize) {
-            eprintln!("Texture update failed: {}", e);
-            continue;
-        }
+        stream_tex.update(None, &rgba, (W * 4) as usize).ok();
 
+        canvas.clear();
         let (win_w, win_h) = canvas.window().size();
         let scale = (win_w as f32 / W as f32)
             .min(win_h as f32 / H as f32)
@@ -599,31 +415,22 @@ pub fn main(rom_path: String) {
             .max(1.0);
         let dest_w = (W as f32 * scale) as u32;
         let dest_h = (H as f32 * scale) as u32;
-        let dst_x = (win_w - dest_w) / 2;
-        let dst_y = (win_h - dest_h) / 2;
-        let dest = Rect::new(dst_x as i32, dst_y as i32, dest_w, dest_h);
-
-        if let Err(e) = canvas.copy(&stream_tex, None, dest) {
-            eprintln!("Canvas copy failed: {}", e);
-            continue;
-        }
+        let dest = Rect::new(
+            ((win_w - dest_w) / 2) as i32,
+            ((win_h - dest_h) / 2) as i32,
+            dest_w,
+            dest_h,
+        );
+        canvas.copy(&stream_tex, None, dest).ok();
         canvas.present();
 
-        // Handle frame timing for split-frame execution
-        let frame_end = Instant::now();
-        let actual_frame_time = frame_end.duration_since(frame_start);
-
-        // Check for frame timing overruns (exceeded target frame time)
-        if actual_frame_time > frame_duration {
-            _frame_timing_overruns += 1;
-            // Frame timing overrun warning removed for cleaner output
+        // Precise frame timing with accumulator
+        next_frame += frame_duration;
+        let now = Instant::now();
+        if next_frame > now {
+            std::thread::sleep(next_frame - now);
+        } else {
+            next_frame = now; // Reset if we're behind
         }
-
-        // Wait for target frame time if needed (non-blocking wait)
-        if actual_frame_time < frame_duration {
-            std::thread::sleep(frame_duration - actual_frame_time);
-        }
-
-        // Periodic performance reporting removed for cleaner output
     }
 }
