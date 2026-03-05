@@ -15,6 +15,25 @@ use std::collections::VecDeque;
 use std::default::Default;
 use std::time::{Duration, Instant};
 
+fn sleep_until(deadline: Instant) {
+    // Windows 的 sleep 精度容易抖動：先睡到接近 deadline，最後用短暫自旋補齊
+    const SPIN_THRESHOLD: Duration = Duration::from_millis(2);
+
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            break;
+        }
+
+        let remaining = deadline - now;
+        if remaining > SPIN_THRESHOLD {
+            std::thread::sleep(remaining - SPIN_THRESHOLD);
+        } else {
+            std::hint::spin_loop();
+        }
+    }
+}
+
 /// 錯誤類型
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -424,13 +443,17 @@ pub fn main(rom_path: String) {
         canvas.copy(&stream_tex, None, dest).ok();
         canvas.present();
 
-        // Precise frame timing with accumulator
+        // Frame pacing: 累加 deadline + sleep-then-spin，避免忽快忽慢
         next_frame += frame_duration;
         let now = Instant::now();
         if next_frame > now {
-            std::thread::sleep(next_frame - now);
+            sleep_until(next_frame);
         } else {
-            next_frame = now; // Reset if we're behind
+            // 落後時不要直接 next_frame = now（會導致節奏漂移/抖動）
+            // 只把 next_frame 往前推到「剛好超過 now」即可
+            while next_frame + frame_duration <= now {
+                next_frame += frame_duration;
+            }
         }
     }
 }

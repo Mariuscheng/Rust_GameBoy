@@ -279,21 +279,11 @@ impl GameBoy {
         // 清掉上一幀可能殘留的 ready
         let _ = self.ppu.take_frame_ready();
 
-        let mut got_frame = false;
-
+        // 以「進入 VBlank 的升緣」作為幀完成訊號：不會被指令邊界漏掉
         loop {
             let _ = self.step_cpu_with_timing();
 
-            if !got_frame && self.ppu.take_frame_ready() {
-                got_frame = true;
-            }
-
-            // 取得一幀快照後，繼續跑到下一幀起點，讓狀態對齊且可重現
-            if got_frame
-                && self.ppu.ly == 0
-                && self.ppu.dots == 0
-                && self.ppu.mode == crate::ppu::LcdMode::OamSearch
-            {
+            if self.ppu.take_frame_ready() {
                 break;
             }
         }
