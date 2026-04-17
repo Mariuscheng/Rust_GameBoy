@@ -1,4 +1,299 @@
-<!doctype html>
+<!DOCTYPE html>
+<html lang="zh-tw">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust GameBoy Emulator: A.I. Assisted Journey</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --term-green: #39ff14;
+            --term-bg: #050505;
+            --glitch-green: #00ff00;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--term-bg);
+            color: var(--term-green);
+            font-family: 'VT323', 'Courier New', Courier, monospace;
+            font-size: 20px;
+            line-height: 1.6;
+            text-shadow: 0 0 5px rgba(57, 255, 20, 0.5);
+            overflow-x: hidden;
+        }
+
+        /* 掃描線效果 (CRT Scanline) */
+        body::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        header {
+            border-bottom: 2px dashed var(--term-green);
+            padding: 20px;
+            text-align: center;
+            background-color: rgba(0, 255, 0, 0.05);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .container {
+            display: flex;
+            min-height: calc(100vh - 120px);
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 左邊：目錄 */
+        .sidebar {
+            width: 250px;
+            border-right: 2px solid var(--term-green);
+            padding-right: 20px;
+            margin-right: 20px;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--term-green);
+            padding-bottom: 5px;
+        }
+
+        .sidebar ul {
+            list-style-type: none;
+        }
+
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+
+        .sidebar a {
+            color: var(--term-green);
+            text-decoration: none;
+            display: block;
+            padding: 5px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .sidebar a:hover, .sidebar a.active {
+            background-color: var(--term-green);
+            color: var(--term-bg);
+            text-shadow: none;
+            font-weight: bold;
+        }
+
+        .sidebar a::before {
+            content: "> ";
+        }
+
+        /* 右邊：內容 */
+        .content {
+            flex-grow: 1;
+            padding-left: 10px;
+        }
+
+        .section {
+            display: none;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            border-bottom: 1px dashed var(--term-green);
+            padding-bottom: 10px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        pre {
+            background-color: rgba(0, 255, 0, 0.1);
+            border: 1px solid var(--term-green);
+            padding: 15px;
+            overflow-x: auto;
+            margin: 20px 0;
+            box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
+        }
+
+        code {
+            font-family: 'VT323', monospace;
+            font-size: 1.1em;
+        }
+
+        .prompt-box {
+            border-left: 4px solid var(--term-green);
+            padding: 10px 15px;
+            margin: 15px 0;
+            background-color: rgba(57, 255, 20, 0.05);
+            font-style: italic;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.2em;
+            background-color: var(--term-green);
+            vertical-align: middle;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Rust GameBoy Emulator: A.I. Assisted Journey</h1>
+        <p>INITIATING VIBE CODING PROTOCOL... <span class="cursor"></span></p>
+    </header>
+
+    <div class="container">
+        <!-- 左邊：目錄 -->
+        <nav class="sidebar">
+            <h3>SYSTEM_MENU</h3>
+            <ul id="nav-links">
+                <li><a data-target="intro" class="active">簡介 (Intro)</a></li>
+                <li><a data-target="cpu">CPU (中央處理器)</a></li>
+                <li><a data-target="ppu">PPU (圖像處理器)</a></li>
+                <li><a data-target="dma">DMA (直接記憶體存取)</a></li>
+                <li><a data-target="more">還有更多...</a></li>
+            </ul>
+        </nav>
+
+        <!-- 右邊：內容 -->
+        <main class="content">
+            <!-- 簡介 -->
+            <section id="intro" class="section active">
+                <h2>> 歡迎來到 Vibe Coding 空間</h2>
+                <p>這是一場與 A.I. 協同作戰的「Vibe Coding」之旅。這裡沒有枯燥的教學，只有人機協作的火花。</p>
+                <p>在這個專案中，我使用了 Rust 語言來開發這個 8-bit 的 GameBoy 模擬器。透過結構化的 Prompt (提示詞)，我一步步引導 A.I. 來完成這個專案。</p>
+                
+                <div class="prompt-box">
+                    我負責規劃整體的模擬器架構與除錯，而 A.I. 負責「肌肉記憶」——產出大量的 Rust 程式碼。這就是 Vibe Coding。
+                </div>
+            </section>
+
+            <!-- CPU -->
+            <section id="cpu" class="section">
+                <h2>> 核心模組：用 A.I. 寫 CPU 指令</h2>
+                <p>撰寫 GameBoy CPU (LR35902) 中數百個 Opcode 是一件非常機械化的工作。這正是 A.I. 發揮的最佳舞台。</p>
+                
+                <h3>A.I. Prompt (指令示範)：</h3>
+                <div class="prompt-box">
+                    「我正在開發 Rust GameBoy 模擬器。請幫我實作 `execute_instruction` 函式，用 `match` 語句處理 opcode 0x00 到 0x05。請確保使用 Rust 的 `wrapping_add` 與 `wrapping_sub` 來處理暫存器的加減法，並更新 Flag 暫存器。」
+                </div>
+
+                <h3>Rust 實作技巧：</h3>
+                <p>A.I. 利用了 Rust 強大的 Pattern Matching，並且很好地運用了安全運算 (如 Wrapping) 避免整數溢位錯誤。</p>
+
+                <pre><code>// A.I. 產生的 Rust 程式碼範例：
+pub fn execute_instruction(&mut self, opcode: u8) {
+    match opcode {
+        0x00 => { /* NOP */ },
+        0x04 => { 
+            // INC B
+            self.b = self.b.wrapping_add(1);
+            self.update_zero_flag(self.b);
+            self.clear_subtract_flag();
+            self.update_half_carry_flag_add(self.b.wrapping_sub(1), 1);
+        },
+        0x05 => {
+            // DEC B
+            self.b = self.b.wrapping_sub(1);
+            // ...
+        },
+        _ => panic!("未處理的 opcode: 0x{:02X}", opcode),
+    }
+}</code></pre>
+            </section>
+
+            <!-- PPU -->
+            <section id="ppu" class="section">
+                <h2>> 顯示核心：PPU</h2>
+                <p>PPU 的時序 (Timing) 是模擬器中最難纏的怪物。在這裡，我讓 A.I. 專注於狀態機 (State Machine) 的切換。</p>
+                <div class="prompt-box">
+                    「請幫我寫一個 PPU 的 tick() 邏輯，根據累積的 cycles 在 HBlank, VBlank, OAMSearch 與 PixelTransfer 這四個狀態中正確切換。」
+                </div>
+            </section>
+
+            <!-- DMA -->
+            <section id="dma" class="section">
+                <h2>> 記憶體傳輸：DMA</h2>
+                <p>OAM DMA 傳輸要求在 160 個週期內將資料轉移。A.I. 建議使用 Rust 的 slice copy 方法，比起一個 byte 一個 byte 複製，效能大幅提升。</p>
+            </section>
+
+            <!-- 還有更多 -->
+            <section id="more" class="section">
+                <h2>> 還有更多元件...</h2>
+                <p>整個系統還有很多部分是由 A.I. 的協助下完成的：</p>
+                <ul>
+                    <li>[+] <strong>MMU:</strong> 卡匣的 Bank Switching 管理</li>
+                    <li>[+] <strong>APU:</strong> 聲音處理</li>
+                    <li>[+] <strong>Joypad:</strong> 控制器中斷與輸入矩陣</li>
+                </ul>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const links = document.querySelectorAll('#nav-links a');
+            const sections = document.querySelectorAll('.section');
+
+            links.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    
+                    links.forEach(l => l.classList.remove('active'));
+                    sections.forEach(s => s.classList.remove('active'));
+
+                    link.classList.add('active');
+                    const targetId = link.getAttribute('data-target');
+                    document.getElementById(targetId).classList.add('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html><!doctype html>
 <html lang="zh-Hant">
 <head>
 	<meta charset="utf-8">
