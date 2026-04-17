@@ -8,10 +8,11 @@
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
         :root {
-            --gb-darkest: #0f380f;
-            --gb-dark: #306230;
-            --gb-light: #8bac0f;
-            --gb-lightest: #9bbc0f;
+            /* 柔和舒服的拿鐵/暖暮色系 (Soft Latte / Warm Dusk) */
+            --gb-darkest: #332d2b;   /* 背景深褐色 */
+            --gb-dark: #4a423f;      /* 區塊/側邊欄灰褐色 */
+            --gb-light: #d6ae93;     /* 柔和的奶茶色/亮邊框 */
+            --gb-lightest: #f9f1ea;  /* 柔和暖白文字色 */
         }
 
         body {
@@ -150,6 +151,64 @@
             pointer-events: none;
             z-index: 9999;
         }
+
+        /* 手機版響應式設計 (Mobile Responsive) */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                height: auto;
+                overflow-y: auto;
+            }
+            
+            #sidebar {
+                width: 100%;
+                height: auto;
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+                padding: 10px;
+                box-sizing: border-box;
+                border-right: none;
+                border-bottom: 6px solid var(--gb-light);
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            }
+
+            #sidebar h2 {
+                width: 100%;
+                margin-bottom: 10px;
+                font-size: 14px;
+            }
+
+            .nav-btn {
+                flex: 1 1 45%;
+                margin: 5px;
+                padding: 10px;
+                font-size: 10px;
+                text-align: center;
+            }
+
+            #content-area {
+                padding: 15px;
+                overflow-y: visible;
+            }
+
+            .content-section {
+                padding: 15px;
+                box-shadow: 4px 4px 0px var(--gb-lightest);
+            }
+
+            h2 {
+                font-size: 16px;
+            }
+
+            pre, code, .prompt-box {
+                font-size: 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -218,7 +277,32 @@ match opcode {
                 請幫我寫 GameBoy 模擬器的 PPU (Pixel Processing Unit)。
                 我們需要實作 Scanline 渲染機制。請建立一個可以管理 OAM、VRAM 和 LCD Control 暫存器的結構。請用狀態機 (State Machine) 來表示 PPU 的模式 (OAM Scan, Pixel Transfer, HBlank, VBlank)。
             </div>
-            <p>A.I. 會建議你用 <code>enum PpuMode { HBlank, VBlank, OamScan, PixelTransfer }</code> 來控制畫面的逐行渲染時序 (Timing)。</p>
+            <p>A.I. 會建議你用 <code>enum PpuMode</code> 來控制畫面的逐行渲染時序 (Timing)，你可以預期 A.I. 產生出像這樣的狀態機示範程式碼：</p>
+            <pre><code>
+pub enum PpuMode {
+    HBlank = 0,
+    VBlank = 1,
+    OamScan = 2,
+    PixelTransfer = 3,
+}
+
+impl Ppu {
+    pub fn step(&mut self, cycles: u8) {
+        self.dots += cycles as u32;
+        match self.mode {
+            PpuMode::OamScan => {
+                if self.dots >= 80 {
+                    self.mode = PpuMode::PixelTransfer;
+                    // 開始繪製像素...
+                }
+            },
+            PpuMode::PixelTransfer => { /* ... */ },
+            PpuMode::HBlank => { /* ... */ },
+            PpuMode::VBlank => { /* ... */ },
+        }
+    }
+}
+            </code></pre>
         </div>
 
         <!-- APU -->
@@ -228,6 +312,30 @@ match opcode {
             <div class="prompt-box">
                 請利用 Rust 實作 GameBoy APU 中的 Channel 1 (方波)。請實作 Sweep 功能以及 Duty Cycle。我們後續會將音訊緩衝區輸出給 SDL3 播放。
             </div>
+            <p>A.I. 能夠根據提示幫你設定好佔空比 (Duty Cycle) 的序列，以及處理包絡線 (Envelope) 和頻率掃描 (Sweep)：</p>
+            <pre><code>
+// 方波的佔空比波形陣列 (12.5%, 25%, 50%, 75%)
+const DUTY_WAVES: [[u8; 8]; 4] = [
+    [0,0,0,0,0,0,0,1],
+    [1,0,0,0,0,0,0,1],
+    [1,0,0,0,0,1,1,1],
+    [0,1,1,1,1,1,1,0],
+];
+
+pub struct Channel1 {
+    pub frequency: u16,
+    pub duty_pattern: u8,
+    pub volume: u8,
+    // ...
+}
+
+impl Channel1 {
+    pub fn get_amplitude(&self, step: usize) -> u8 {
+        let bit = DUTY_WAVES[self.duty_pattern as usize][step];
+        if bit == 1 { self.volume } else { 0 }
+    }
+}
+            </code></pre>
         </div>
 
         <!-- DMA -->
@@ -237,6 +345,36 @@ match opcode {
             <div class="prompt-box">
                 實作 OAM DMA 傳輸。當 CPU 寫入 0xFF46 暫存器時觸發。請模擬傳輸所需的 160 個 M-Cycles 延遲，在這段期間內 CPU 只能存取 HRAM。
             </div>
+            <p>A.I. 會為 DMA 加上一個倒數計時器，透過每個 Clock Cycle 自動搬運資料的機制：</p>
+            <pre><code>
+pub struct Dma {
+    pub active: bool,
+    pub byte_state: u8, // 0 到 159
+    pub source_addr: u16,
+}
+
+impl Dma {
+    pub fn start(&mut self, value: u8) {
+        self.source_addr = (value as u16) << 8;
+        self.byte_state = 0;
+        self.active = true;
+    }
+
+    pub fn tick(&mut self, mmu: &mut Mmu) {
+        if self.active {
+            // 每 Tick 搬運一個 Byte 到 OAM
+            let src = self.source_addr + self.byte_state as u16;
+            let data = mmu.read_byte(src);
+            mmu.write_oam(self.byte_state, data);
+
+            self.byte_state += 1;
+            if self.byte_state >= 160 {
+                self.active = false;
+            }
+        }
+    }
+}
+            </code></pre>
         </div>
 
         <!-- 還有更多 -->
